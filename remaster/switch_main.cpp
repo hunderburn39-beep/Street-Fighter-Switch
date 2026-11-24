@@ -93,7 +93,7 @@ int main(){
  while(appletMainLoop()){
  SwitchInput::poll();if(SwitchInput::exitRequested())break;
  auto t0=std::chrono::steady_clock::now();session.step();auto t1=std::chrono::steady_clock::now();if(first)trace("first core frame ok");glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
- renderer.draw(160,0,960,720,false);graphics.present();auto t2=std::chrono::steady_clock::now();
+ renderer.draw(160,0,960,720,true);graphics.present();auto t2=std::chrono::steady_clock::now();
  stepMs+=std::chrono::duration<double,std::milli>(t1-t0).count();presentMs+=std::chrono::duration<double,std::milli>(t2-t1).count();
  if(++perfFrames==300){double elapsed=std::chrono::duration<double>(t2-perfStart).count();char msg[160];std::snprintf(msg,sizeof(msg),"PERF fps=%.2f step_ms=%.2f render_ms=%.2f",300/elapsed,stepMs/300,presentMs/300);trace(msg);perfFrames=0;stepMs=presentMs=0;perfStart=t2;}
  if(first){trace("first presentation ok");first=false;}
