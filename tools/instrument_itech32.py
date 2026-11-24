@@ -3,12 +3,15 @@ import argparse
 from pathlib import Path
 
 HOOK = r'''
-static void remaster_capture(int compressed, UINT16 color)
+static unsigned long remaster_frame, remaster_order;
+static void remaster_capture(int compressed, UINT16 color, UINT16 *base)
 {
-    static FILE *out;
+    static FILE *out, *timeline;
     unsigned i;
     if (!out) out = fopen("sftm-blits.tsv", "w");
     if (!out) return;
+    if (!timeline) timeline = fopen("sftm-timeline.tsv", "w");
+    if (timeline) fprintf(timeline, "%lu\t%lu\t%u\t%u\t%d\n", remaster_frame, remaster_order++, (unsigned)(VIDEO_TRANSFER_X & 0xfff), (unsigned)(VIDEO_TRANSFER_Y & 0xfff), base == videoplane[0] ? 0 : 1);
     fprintf(out, "%u\t%u\t%u\t%u\t%u\t%u\t",
         (unsigned)((grom_bank | ((VIDEO_TRANSFER_ADDRHI & 0xff) << 16) | VIDEO_TRANSFER_ADDRLO) % grom_size),
         (unsigned)VIDEO_TRANSFER_WIDTH,
@@ -43,7 +46,18 @@ def patch(source):
             c = source[end]
             depth += (c == "{") - (c == "}")
             end += 1
-        source = source[:end-1] + f"\n\tremaster_capture({compressed}, color);\n" + source[end-1:]
+        source = source[:end-1] + f"\n\tremaster_capture({compressed}, color, base);\n" + source[end-1:]
+    frame_anchor = "VIDEO_UPDATE( itech32 )\n{"
+    if source.count(frame_anchor) != 1:
+        raise ValueError("Unsupported frame callback")
+    # Insert at end of callback to preserve C89 declarations.
+    start = source.index(frame_anchor) + len(frame_anchor)
+    depth, end = 1, start
+    while depth:
+        ch = source[end]
+        depth += (ch == "{") - (ch == "}")
+        end += 1
+    source = source[:end-1] + "\n\tremaster_frame++; remaster_order = 0;\n" + source[end-1:]
     return "#include <stdio.h>\n" + source
 
 if __name__ == "__main__":
