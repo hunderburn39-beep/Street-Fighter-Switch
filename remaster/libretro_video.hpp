@@ -27,6 +27,11 @@ public:
   try {
    const size_t bpp=format==1?4:2;
    if(!width||!height||width>4096||height>4096||pitch<size_t(width)*bpp)throw std::runtime_error("Invalid video dimensions");
+#ifdef __SWITCH__
+   if(format==2 && pitch%2==0){
+    ++frames;renderer->upload(data,int(width),int(height),int(pitch),false);return;
+   }
+#endif
    converted.resize(size_t(width)*height*4);
    unsigned nonzero=0;
    for(unsigned y=0;y<height;++y){
