@@ -20,7 +20,9 @@ jobs:
           mkdir -p test-output
           python -c "from pathlib import Path; Path('test-output/graphics.bin').write_bytes(bytes([132,1,2,3,255])); Path('test-output/trace.tsv').write_text('\t'.join(['0','2','2','1','1','0',bytes(range(256)).hex()*3])+'\n')"
           python tools/export_assets.py test-output/graphics.bin test-output/trace.tsv test-output/assets
-          python tools/restore_hd.py test-output/assets/original test-output/restored
+          python tools/restore_hd.py test-output/assets/original test-output/restored --indexed
+          python tools/restore_hd.py test-output/assets/original test-output/fullcolor --scale 8
+          python -c "from pathlib import Path; from PIL import Image; im=Image.open(next(Path('test-output/fullcolor').glob('*.png'))); assert im.size==(16,16) and im.mode=='RGBA'; assert im.getchannel('A').getextrema()==(0,255)"
           python -c "from pathlib import Path; from PIL import Image; p=list(Path('test-output/restored').glob('*.png')); assert len(p)==1; im=Image.open(p[0]); assert im.size==(8,8) and im.mode=='P' and im.info.get('transparency')==255; assert len(im.getpalette())<=768; alpha=im.convert('RGBA').getchannel('A'); assert alpha.getextrema()==(0,255); assert alpha.getpixel((7,7))==0"
       - uses: actions/upload-artifact@v4
         with:
