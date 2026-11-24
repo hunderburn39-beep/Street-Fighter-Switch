@@ -1,0 +1,38 @@
+name: Sprite geometry validation
+on:
+  push:
+    paths:
+      - 'tools/validate_sprite_geometry.py'
+      - '.github/workflows/sprite-geometry.yml'
+  workflow_dispatch:
+jobs:
+  geometry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install numpy Pillow
+      - name: Test matching and displaced silhouettes
+        run: |
+          mkdir -p original valid invalid
+          python - <<'PY'
+          from PIL import Image, ImageDraw
+          im=Image.new('RGBA',(32,32))
+          ImageDraw.Draw(im).rectangle((8,4,20,28),fill=(255,255,255,255))
+          im.save('original/frame.png')
+          im.resize((128,128),Image.Resampling.LANCZOS).save('valid/frame.png')
+          bad=Image.new('RGBA',(128,128))
+          ImageDraw.Draw(bad).rectangle((64,16,116,112),fill=(255,255,255,255))
+          bad.save('invalid/frame.png')
+          PY
+          python tools/validate_sprite_geometry.py original valid --report valid.json
+          if python tools/validate_sprite_geometry.py original invalid --report invalid.json; then
+            echo 'Incorrect silhouette accepted'
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geometry-reports
+          path: '*.json'
