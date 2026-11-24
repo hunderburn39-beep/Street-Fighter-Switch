@@ -39,9 +39,10 @@ public:
   glPixelStorei(GL_UNPACK_ROW_LENGTH,pitch/2);
   if(w!=width || h!=height){
    w=width;h=height;
-   glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,w,h,0,GL_RGB,GL_UNSIGNED_SHORT_5_6_5,pixels);
+   glTexImage2D(GL_TEXTURE_2D,0,GL_RGB565,w,h,0,GL_RGB,GL_UNSIGNED_SHORT_5_6_5,pixels);
   }else glTexSubImage2D(GL_TEXTURE_2D,0,0,0,w,h,GL_RGB,GL_UNSIGNED_SHORT_5_6_5,pixels);
   glPixelStorei(GL_UNPACK_ROW_LENGTH,0);glPixelStorei(GL_UNPACK_ALIGNMENT,4);
+  if(glGetError()!=GL_NO_ERROR){w=h=0;throw std::runtime_error("Texture upload failed");}
  }
  void draw(int x,int y,int width,int height,bool hd){
   if(!tex || !w || !h) return;
