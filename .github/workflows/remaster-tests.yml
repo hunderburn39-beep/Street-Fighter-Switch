@@ -1,0 +1,28 @@
+name: Remaster validation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/**'
+      - '.github/workflows/remaster-tests.yml'
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install Pillow
+      - run: python -m unittest discover -s tools -p 'test_*.py'
+      - name: Synthetic end-to-end test
+        run: |
+          mkdir -p test-output
+          python -c "from pathlib import Path; Path('test-output/graphics.bin').write_bytes(bytes([132,1,2,3,255])); Path('test-output/trace.tsv').write_text('\t'.join(['0','2','2','1','1','0',bytes(range(256)).hex()*3])+'\n')"
+          python tools/export_assets.py test-output/graphics.bin test-output/trace.tsv test-output/assets
+          python tools/restore_hd.py test-output/assets/original test-output/restored
+          python -c "from pathlib import Path; from PIL import Image; p=list(Path('test-output/restored').glob('*.png')); assert len(p)==1; im=Image.open(p[0]); assert im.size==(8,8) and im.mode=='RGBA'"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: remaster-synthetic-validation
+          path: test-output/
