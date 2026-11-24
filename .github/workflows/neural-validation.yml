@@ -21,6 +21,10 @@ jobs:
           curl -fL --retry 3 https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip -o neural.zip
           unzip -q neural.zip -d neural
           find neural -name realesrgan-ncnn-vulkan -exec chmod +x {} +
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neural-linux-runtime
+          path: neural/
       - name: Run actual neural inference
         run: |
           mkdir -p sample restored
