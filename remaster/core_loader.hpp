@@ -1,13 +1,17 @@
 #pragma once
+#ifndef __SWITCH__
 #include <dlfcn.h>
+#endif
 #include <stdexcept>
 #include <cstddef>
 #include <cstdint>
 class CoreLoader {
+#ifndef __SWITCH__
  void* handle=nullptr;
  template<class T> T symbol(const char* name){
   auto p=dlsym(handle,name);if(!p)throw std::runtime_error(name);return reinterpret_cast<T>(p);
  }
+#endif
 public:
  struct GameInfo {const char* path;const void* data;std::size_t size;const char* meta;};
  using Environment=bool(*)(unsigned,void*);
@@ -28,6 +32,7 @@ public:
  void (*deinit)()=nullptr;
  void (*run)()=nullptr;
  unsigned (*api_version)()=nullptr;
+#ifndef __SWITCH__
  explicit CoreLoader(const char* path){
   handle=dlopen(path,RTLD_NOW|RTLD_LOCAL);
   if(!handle)throw std::runtime_error(dlerror());
@@ -47,8 +52,38 @@ public:
    if(api_version()!=1)throw std::runtime_error("Unsupported Libretro API");
   }catch(...){dlclose(handle);throw;}
  }
+#else
+ struct StaticApi {
+  decltype(set_environment) environment;
+  decltype(set_audio) audio;
+  decltype(set_audio_batch) batch;
+  decltype(set_input_poll) poll;
+  decltype(set_input_state) input;
+  decltype(load_game) load;
+  decltype(unload_game) unload;
+  decltype(set_video) video;
+  decltype(init) initialize;
+  decltype(deinit) shutdown;
+  decltype(run) execute;
+  decltype(api_version) version;
+ };
+ explicit CoreLoader(const StaticApi& a):
+ set_environment(a.environment),set_audio(a.audio),set_audio_batch(a.batch),
+ set_input_poll(a.poll),set_input_state(a.input),load_game(a.load),
+ unload_game(a.unload),set_video(a.video),init(a.initialize),deinit(a.shutdown),
+ run(a.execute),api_version(a.version){
+  if(!set_environment||!set_audio||!set_audio_batch||!set_input_poll||
+     !set_input_state||!load_game||!unload_game||!set_video||!init||
+     !deinit||!run||!api_version||api_version()!=1)
+   throw std::runtime_error("Invalid static Libretro API");
+ }
+#endif
  CoreLoader(const CoreLoader&)=delete;
  CoreLoader& operator=(const CoreLoader&)=delete;
+#ifndef __SWITCH__
  ~CoreLoader(){if(handle)dlclose(handle);}
+#else
+ ~CoreLoader()=default;
+#endif
  // Caller must unload game and deinitialize core before destruction.
 };
