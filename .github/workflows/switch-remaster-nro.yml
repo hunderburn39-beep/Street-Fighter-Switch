@@ -20,7 +20,7 @@ jobs:
       - name: Resolve core revision
         id: revision
         run: echo "sha=$(git ls-remote https://github.com/libretro/mame2003-plus-libretro.git HEAD | cut -f1)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         id: core-cache
         with:
           path: core
@@ -31,6 +31,11 @@ jobs:
           git clone https://github.com/libretro/mame2003-plus-libretro.git core
           git -C core checkout "${{ steps.revision.outputs.sha }}"
           make -C core platform=libnx -j2
+      - uses: actions/cache/save@v4
+        if: steps.core-cache.outputs.cache-hit != 'true'
+        with:
+          path: core
+          key: switch-mame-core-v2-${{ steps.revision.outputs.sha }}
       - name: Build Libretro support library
         shell: bash
         run: |
@@ -43,6 +48,7 @@ jobs:
             if [ -d "$common/$dir" ]; then
               for src in "$common/$dir/"*.c; do
                 [ -f "$src" ] || continue
+                case "$src" in *archive_file_7z.c) continue ;; esac
                 aarch64-none-elf-gcc -O2 -D__SWITCH__ -DHAVE_ZLIB -I"$common/include" -I"$DEVKITPRO/libnx/include" -I"$DEVKITPRO/portlibs/switch/include" -c "$src" -o "support/${dir}_$(basename "$src" .c).o"
               done
             fi
