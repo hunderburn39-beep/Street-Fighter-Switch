@@ -14,6 +14,7 @@ static void trace(const char* msg){
  if(FILE* f=std::fopen("sdmc:/switch/sftm/sftm-debug.log","a")){std::fprintf(f,"%s\n",msg);std::fflush(f);std::fclose(f);}
 }
 static void coreLog(int level,const char* fmt,...){
+ if(level<2)return;
  if(std::strstr(fmt,"set_irq_line") || std::strstr(fmt,"sound_data_") || std::strstr(fmt,"sound output write"))return;
  if(FILE* f=std::fopen("sdmc:/switch/sftm/sftm-debug.log","a")){std::fprintf(f,"core[%d]: ",level);va_list ap;va_start(ap,fmt);std::vfprintf(f,fmt,ap);va_end(ap);std::fflush(f);std::fclose(f);}
 }
@@ -86,10 +87,16 @@ int main(){
  SwitchAudio::batch,SwitchInput::poll,SwitchInput::state,game);
  trace("session ok; first frame begin");
  bool first=true;
+ unsigned perfFrames=0;
+ auto perfStart=std::chrono::steady_clock::now();
+ double stepMs=0,presentMs=0;
  while(appletMainLoop()){
  SwitchInput::poll();if(SwitchInput::exitRequested())break;
- session.step();if(first)trace("first core frame ok");glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
- renderer.draw(160,0,960,720,false);graphics.present();if(first){trace("first presentation ok");first=false;}
+ auto t0=std::chrono::steady_clock::now();session.step();auto t1=std::chrono::steady_clock::now();if(first)trace("first core frame ok");glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
+ renderer.draw(160,0,960,720,false);graphics.present();auto t2=std::chrono::steady_clock::now();
+ stepMs+=std::chrono::duration<double,std::milli>(t1-t0).count();presentMs+=std::chrono::duration<double,std::milli>(t2-t1).count();
+ if(++perfFrames==300){double elapsed=std::chrono::duration<double>(t2-perfStart).count();char msg[160];std::snprintf(msg,sizeof(msg),"PERF fps=%.2f step_ms=%.2f render_ms=%.2f",300/elapsed,stepMs/300,presentMs/300);trace(msg);perfFrames=0;stepMs=presentMs=0;perfStart=t2;}
+ if(first){trace("first presentation ok");first=false;}
  }}
  renderer.release();glDeleteProgram(p);glDeleteShader(v);glDeleteShader(f);
  }catch(const std::exception& e){
