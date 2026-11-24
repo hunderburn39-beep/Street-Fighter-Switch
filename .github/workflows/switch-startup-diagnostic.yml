@@ -1,0 +1,40 @@
+name: Switch startup diagnostic
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.github/workflows/switch-startup-diagnostic.yml']
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkita64:latest
+    steps:
+      - name: Build minimal libnx probe
+        shell: bash
+        run: |
+          set -eux
+          export PATH="$DEVKITPRO/devkitA64/bin:$DEVKITPRO/tools/bin:$PATH"
+          cat > probe.c <<'EOF'
+          #include <switch.h>
+          #include <stdio.h>
+          int main(void) {
+            consoleInit(NULL);
+            printf("SFTM startup probe: main reached\n");
+            FILE *f=fopen("sdmc:/switch/sftm/startup-probe.log","w");
+            if(f){fputs("main reached; SD write OK\n",f);fclose(f);printf("SD write OK\n");}
+            else printf("SD write failed\n");
+            printf("Press PLUS to exit\n");
+            padConfigureInput(1,HidNpadStyleSet_NpadStandard);
+            PadState pad;padInitializeDefault(&pad);
+            while(appletMainLoop()){padUpdate(&pad);if(padGetButtonsDown(&pad)&HidNpadButton_Plus)break;consoleUpdate(NULL);}
+            consoleExit(NULL);
+            return 0;
+          }
+          EOF
+          mkdir -p output
+          aarch64-none-elf-gcc -O2 -D__SWITCH__ -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE -I"$DEVKITPRO/libnx/include" probe.c -specs="$DEVKITPRO/libnx/switch.specs" -L"$DEVKITPRO/libnx/lib" -lnx -o probe.elf
+          elf2nro probe.elf output/SFTM-Startup-Probe.nro
+          test -s output/SFTM-Startup-Probe.nro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SFTM-Startup-Probe
+          path: output/
