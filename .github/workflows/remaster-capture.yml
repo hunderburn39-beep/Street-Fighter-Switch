@@ -6,11 +6,14 @@ on:
       - '.github/workflows/remaster-capture.yml'
 jobs:
   capture-core:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - name: Fetch original emulator source
-        run: git clone --depth 1 https://github.com/libretro/mame2003-plus-libretro.git core
+        run: |
+          git init core
+          git -C core fetch --depth 1 https://github.com/libretro/mame2003-plus-libretro.git c7516a813cfc0dcc80508dadfeb9d8c62d710af0
+          git -C core checkout FETCH_HEAD
       - name: Install graphics capture hook
         run: python3 tools/instrument_itech32.py core/src/vidhrdw/itech32_vidhrdw.c
       - name: Compile instrumented core
@@ -20,6 +23,8 @@ jobs:
           mkdir -p output
           cp core/mame2003_plus_libretro.so output/
           test -s output/mame2003_plus_libretro.so
+          ldd -r output/mame2003_plus_libretro.so
+          python3 -c 'import ctypes; c=ctypes.CDLL("./output/mame2003_plus_libretro.so"); assert c.retro_api_version() == 1'
           git -C core rev-parse HEAD > output/upstream-commit.txt
       - uses: actions/upload-artifact@v4
         with:
