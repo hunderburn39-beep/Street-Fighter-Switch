@@ -1,0 +1,29 @@
+name: Switch full MAME NRO
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.github/workflows/switch-full.yml']
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkita64:latest
+    steps:
+      - name: Install dependencies
+        run: dkp-pacman -S --needed --noconfirm switch-mesa switch-zlib switch-bzip2 switch-freetype switch-libpng switch-libjpeg-turbo
+      - name: Build core and frontend
+        shell: bash
+        run: |
+          set -eux
+          export PATH="$DEVKITPRO/devkitA64/bin:$DEVKITPRO/tools/bin:$PATH"
+          git clone --depth 1 https://github.com/libretro/mame2003-plus-libretro.git core
+          git clone --depth 1 https://github.com/libretro/RetroArch.git frontend
+          make -C core platform=libnx -j2
+          cp core/*_libretro_libnx.a frontend/libretro_libnx.a
+          make -C frontend -f Makefile.libnx -j2
+          mkdir output
+          cp frontend/retroarch_switch.nro output/Street-Fighter-MAME.nro
+          test -s output/Street-Fighter-MAME.nro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: switch-full-mame
+          path: output/
