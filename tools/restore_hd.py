@@ -14,7 +14,14 @@ def restore(image, scale=4):
     interior = alpha.filter(ImageFilter.MinFilter(5))
     rgb = Image.composite(sharp, rgb, interior)
     rgb.putalpha(alpha)
-    return rgb
+    # Preserve indexed 256-colour output, reserving index 255 for transparency.
+    mask = alpha.point(lambda v: 255 if v >= 128 else 0)
+    if mask.getextrema() == (255, 255):
+        return rgb.convert("RGB").quantize(colors=256, dither=Image.Dither.NONE)
+    indexed = rgb.convert("RGB").quantize(colors=255, dither=Image.Dither.NONE)
+    indexed.paste(255, mask=ImageChops.invert(mask))
+    indexed.info["transparency"] = 255
+    return indexed
 
 def main():
     p = argparse.ArgumentParser()
