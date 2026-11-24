@@ -8,20 +8,46 @@
 #include <sstream>
 #include <cstdarg>
 #include <cstring>
+#include <map>
+#include <string>
 static void trace(const char* msg){
  if(FILE* f=std::fopen("sdmc:/switch/sftm/sftm-debug.log","a")){std::fprintf(f,"%s\n",msg);std::fflush(f);std::fclose(f);}
 }
 static void coreLog(int level,const char* fmt,...){
- if(std::strstr(fmt,"set_irq_line"))return;
+ if(std::strstr(fmt,"set_irq_line") || std::strstr(fmt,"sound_data_") || std::strstr(fmt,"sound output write"))return;
  if(FILE* f=std::fopen("sdmc:/switch/sftm/sftm-debug.log","a")){std::fprintf(f,"core[%d]: ",level);va_list ap;va_start(ap,fmt);std::vfprintf(f,fmt,ap);va_end(ap);std::fflush(f);std::fclose(f);}
 }
 static bool environment(unsigned cmd,void* data){
+ struct Variable { const char* key; const char* value; };
+ static std::map<std::string,std::string> defaults;
  static const char* directory="sdmc:/switch/sftm";
  switch(cmd){
  case 27: if(data){struct LogCallback{void(*log)(int,const char*,...);};static_cast<LogCallback*>(data)->log=coreLog;return true;}return false;
  case 10:return data&&LibretroVideo::setFormat(*static_cast<unsigned*>(data));
  case 3:if(data)*static_cast<bool*>(data)=true;return data!=nullptr;
  case 9:case 31:if(data)*static_cast<const char**>(data)=directory;return data!=nullptr;
+ case 16: {
+  if(!data)return false;
+  defaults.clear();
+  for(auto* v=static_cast<const Variable*>(data);v->key;++v){
+   if(!v->value)continue;
+   std::string value=v->value;
+   auto pos=value.find(';');
+   if(pos==std::string::npos)continue;
+   auto start=value.find_first_not_of(" ",pos+1);
+   if(start==std::string::npos)continue;
+   defaults.emplace(v->key,value.substr(start,value.find('|',start)-start));
+  }
+  return true;
+ }
+ case 15: {
+  if(!data)return false;
+  auto* v=static_cast<Variable*>(data);
+  auto it=v->key?defaults.find(v->key):defaults.end();
+  v->value=it==defaults.end()?nullptr:it->second.c_str();
+  return it!=defaults.end();
+ }
+ case 52: if(data)*static_cast<unsigned*>(data)=0;return data!=nullptr;
  case 17:if(data)*static_cast<bool*>(data)=false;return data!=nullptr;
  default:return false;
  }
