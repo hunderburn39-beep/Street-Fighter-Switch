@@ -19,7 +19,7 @@ static bool environment(unsigned cmd,void* data){
  static const char* directory="sdmc:/switch/sftm";
  switch(cmd){
  case 27: if(data){struct LogCallback{void(*log)(int,const char*,...);};static_cast<LogCallback*>(data)->log=coreLog;return true;}return false;
- case 10:return data&&*static_cast<unsigned*>(data)==2;
+ case 10:return data&&LibretroVideo::setFormat(*static_cast<unsigned*>(data));
  case 3:if(data)*static_cast<bool*>(data)=true;return data!=nullptr;
  case 9:case 31:if(data)*static_cast<const char**>(data)=directory;return data!=nullptr;
  case 17:if(data)*static_cast<bool*>(data)=false;return data!=nullptr;
