@@ -50,7 +50,7 @@ jobs:
                 [ -f "$src" ] || continue
                 case "$src" in *archive_file_7z.c|*archive_file_chd.c|*vfs_implementation_cdrom.c|*compat_ifaddrs.c) continue ;; esac
                 if grep -qE "#include [<\"](libchdr/|7z/)" "$src"; then continue; fi
-                aarch64-none-elf-gcc -O2 -D__SWITCH__ -DHAVE_ZLIB -I"$common/include" -I"$DEVKITPRO/libnx/include" -I"$DEVKITPRO/portlibs/switch/include" -c "$src" -o "support/${dir}_$(basename "$src" .c).o"
+                aarch64-none-elf-gcc -O2 -D__SWITCH__ -DSWITCH -DHAVE_LIBNX -DHAVE_ZLIB -I"$common/include" -I"$DEVKITPRO/libnx/include" -I"$DEVKITPRO/portlibs/switch/include" -c "$src" -o "support/${dir}_$(basename "$src" .c).o"
               done
             fi
           done
