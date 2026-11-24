@@ -1,0 +1,14 @@
+name: Validate remaster shaders
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'remaster/shaders/**'
+      - '.github/workflows/remaster-shaders.yml'
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y glslang-tools
+      - run: glslangValidator -l remaster/shaders/hd.vert remaster/shaders/hd.frag
