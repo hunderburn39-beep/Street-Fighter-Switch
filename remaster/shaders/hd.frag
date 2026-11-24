@@ -24,6 +24,12 @@ void main(){
  float diagonalWeight=smoothstep(0.025,0.16,abs(diagonalA-diagonalB));
  vec3 diagonal=diagonalA<diagonalB?mix(a,d,clamp((f.x+f.y)*0.5,0.0,1.0)):mix(b,c,clamp((1.0-f.x+f.y)*0.5,0.0,1.0));
  float proximity=diagonalA<diagonalB?1.0-abs(f.x-f.y):1.0-abs(f.x+f.y-1.0);
- smoothColor=mix(smoothColor,diagonal,0.45*diagonalWeight*pow(proximity,4.0));
- fragColor=vec4(mix(nearest,mix(smoothColor,nearest,smoothstep(0.06,0.22,edge)),clamp(strength,0.0,1.0)),1.0);
+ smoothColor=mix(smoothColor,diagonal,0.45*diagonalWeight*(proximity*proximity*proximity*proximity));
+ vec3 lo=min(min(a,b),min(c,d)), hiColor=max(max(a,b),max(c,d));
+ float detail=1.0-smoothstep(0.08,0.30,edge);
+ vec3 localMean=(a+b+c+d)*0.25;
+ vec3 enhanced=clamp(smoothColor+(smoothColor-localMean)*0.24*detail,lo,hiColor);
+ float boundary=smoothstep(0.08,0.30,edge);
+ vec3 hd=mix(enhanced,nearest,0.72*boundary);
+ fragColor=vec4(mix(nearest,hd,clamp(strength,0.0,1.0)),1.0);
 }
