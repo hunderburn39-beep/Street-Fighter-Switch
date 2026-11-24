@@ -24,7 +24,8 @@ jobs:
             if (f) { fprintf(f, "%s %s\n", step, detail); fflush(f); fclose(f); }
           }
           int main(int argc, char **argv) {
-            logstep("START");
+            { FILE *f = fopen("sdmc:/sftm-debug.log", "w"); if(f) fclose(f); }
+            logstep("START V2");
             if (SDL_Init(0) != 0) { logstep("SDL_Init failed", SDL_GetError()); return 1; }
             logstep("VIDEO begin");
             if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) { logstep("VIDEO failed", SDL_GetError()); SDL_Quit(); return 1; }
@@ -44,14 +45,26 @@ jobs:
             for(int i=0;i<SDL_NumJoysticks();++i) if(SDL_IsGameController(i)) {pad=SDL_GameControllerOpen(i); if(pad) break;}
             SDL_AudioSpec want{}; want.freq=48000; want.format=AUDIO_S16SYS; want.channels=2; want.samples=1024;
             SDL_AudioDeviceID audio=SDL_OpenAudioDevice(nullptr,0,&want,nullptr,0);
-            if(audio) { logstep("AUDIO DEVICE OK"); SDL_PauseAudioDevice(audio,0); } else logstep("AUDIO DEVICE failed", SDL_GetError());
+            if(audio) { logstep("AUDIO DEVICE OK"); /* Keep audio paused until video is proven. */ } else logstep("AUDIO DEVICE failed", SDL_GetError());
             logstep("MAIN LOOP");
             bool running=true;
+            unsigned frame=0;
+            logstep("APPLET begin");
             while(running && appletMainLoop()) {
+              if(frame==0) logstep("APPLET OK; EVENTS begin");
               SDL_Event e;
               while(SDL_PollEvent(&e)) if(e.type==SDL_QUIT || (e.type==SDL_CONTROLLERBUTTONDOWN && e.cbutton.button==SDL_CONTROLLER_BUTTON_START)) running=false;
+              if(frame==0) logstep("EVENTS OK; COLOR begin");
               SDL_SetRenderDrawColor(r,audio?0:120,pad?120:0,80,255);
-              SDL_RenderClear(r); SDL_RenderPresent(r); SDL_Delay(16);
+              if(frame==0) logstep("COLOR OK; CLEAR begin");
+              if(SDL_RenderClear(r)!=0) { logstep("CLEAR failed", SDL_GetError()); break; }
+              if(frame==0) logstep("CLEAR OK; PRESENT begin");
+              SDL_RenderPresent(r);
+              if(frame==0) logstep("PRESENT OK; DELAY begin");
+              SDL_Delay(16);
+              if(frame==0) logstep("FIRST FRAME OK");
+              if(++frame==60 && audio) { logstep("AUDIO unpause begin"); SDL_PauseAudioDevice(audio,0); logstep("AUDIO unpause OK"); }
+              if(frame==120) logstep("120 FRAMES OK");
             }
             if(audio) SDL_CloseAudioDevice(audio);
             if(pad) SDL_GameControllerClose(pad);
