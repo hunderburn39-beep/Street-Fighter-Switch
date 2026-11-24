@@ -10,9 +10,12 @@ def restore(image, scale=4, indexed=False):
     hd = rgba.convert("RGBa").resize(size, Image.Resampling.LANCZOS).convert("RGBA")
     alpha = hd.getchannel("A")
     rgb = hd.convert("RGB")
-    sharp = rgb.filter(ImageFilter.UnsharpMask(radius=1.4, percent=65, threshold=4))
-    interior = alpha.filter(ImageFilter.MinFilter(5))
-    rgb = Image.composite(sharp, rgb, interior)
+    # Multiscale detail enhancement with conservative edge protection.
+    radius = max(0.8, scale * 0.35)
+    fine = rgb.filter(ImageFilter.UnsharpMask(radius=radius, percent=80, threshold=5))
+    broad = fine.filter(ImageFilter.UnsharpMask(radius=scale * 0.9, percent=30, threshold=9))
+    interior = alpha.filter(ImageFilter.MinFilter(2 * scale + 1))
+    rgb = Image.composite(broad, rgb, interior)
     rgb.putalpha(alpha)
     if not indexed:
         return rgb
