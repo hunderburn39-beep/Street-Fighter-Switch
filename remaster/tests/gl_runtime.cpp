@@ -23,7 +23,7 @@ int main(){
  auto v=shader(GL_VERTEX_SHADER,"remaster/shaders/hd.vert"),f=shader(GL_FRAGMENT_SHADER,"remaster/shaders/hd.frag");
  auto p=glCreateProgram();glAttachShader(p,v);glAttachShader(p,f);glLinkProgram(p);
  GLint ok;glGetProgramiv(p,GL_LINK_STATUS,&ok);if(!ok)return 5;
- FrameRenderer r;r.init(p);LibretroVideo::attach(r);
+ FrameRenderer r;r.init(p);LibretroVideo::attach(r);LibretroVideo::setFormat(2);
  std::array<uint16_t,4> pixels={0xf800,0xf800,0xf800,0xf800};
  LibretroVideo::refresh(pixels.data(),2,2,4);
  for(bool hd:{false,true}){
