@@ -18,17 +18,34 @@ jobs:
           cat > smoke.cpp <<'EOF'
           #include <switch.h>
           #include <SDL2/SDL.h>
+          #include <cstdio>
+          static void logstep(const char *step, const char *detail = "") {
+            FILE *f = fopen("sdmc:/sftm-debug.log", "a");
+            if (f) { fprintf(f, "%s %s\n", step, detail); fflush(f); fclose(f); }
+          }
           int main(int argc, char **argv) {
-            if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0) return 1;
+            logstep("START");
+            if (SDL_Init(0) != 0) { logstep("SDL_Init failed", SDL_GetError()); return 1; }
+            logstep("VIDEO begin");
+            if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) { logstep("VIDEO failed", SDL_GetError()); SDL_Quit(); return 1; }
+            logstep("VIDEO OK");
+            logstep("AUDIO begin");
+            if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0) logstep("AUDIO failed", SDL_GetError()); else logstep("AUDIO OK");
+            logstep("PAD begin");
+            if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0) logstep("PAD failed", SDL_GetError()); else logstep("PAD OK");
+            logstep("WINDOW begin");
             SDL_Window *w = SDL_CreateWindow("SFTM platform test",0,0,1280,720,0);
-            if (!w) { SDL_Quit(); return 2; }
+            if (!w) { logstep("WINDOW failed", SDL_GetError()); SDL_Quit(); return 2; }
+            logstep("WINDOW OK");
             SDL_Renderer *r = SDL_CreateRenderer(w,-1,0);
-            if (!r) { SDL_DestroyWindow(w); SDL_Quit(); return 3; }
+            if (!r) { logstep("RENDER failed", SDL_GetError()); SDL_DestroyWindow(w); SDL_Quit(); return 3; }
+            logstep("RENDER OK");
             SDL_GameController *pad = nullptr;
             for(int i=0;i<SDL_NumJoysticks();++i) if(SDL_IsGameController(i)) {pad=SDL_GameControllerOpen(i); if(pad) break;}
             SDL_AudioSpec want{}; want.freq=48000; want.format=AUDIO_S16SYS; want.channels=2; want.samples=1024;
             SDL_AudioDeviceID audio=SDL_OpenAudioDevice(nullptr,0,&want,nullptr,0);
-            if(audio) SDL_PauseAudioDevice(audio,0);
+            if(audio) { logstep("AUDIO DEVICE OK"); SDL_PauseAudioDevice(audio,0); } else logstep("AUDIO DEVICE failed", SDL_GetError());
+            logstep("MAIN LOOP");
             bool running=true;
             while(running && appletMainLoop()) {
               SDL_Event e;
@@ -38,7 +55,7 @@ jobs:
             }
             if(audio) SDL_CloseAudioDevice(audio);
             if(pad) SDL_GameControllerClose(pad);
-            SDL_DestroyRenderer(r); SDL_DestroyWindow(w); SDL_Quit(); return 0;
+            SDL_DestroyRenderer(r); SDL_DestroyWindow(w); SDL_Quit(); logstep("EXIT OK"); return 0;
           }
           EOF
           aarch64-none-elf-g++ -O2 -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE -D__SWITCH__ -I"$DEVKITPRO/libnx/include" $(pkg-config --cflags sdl2) smoke.cpp -specs="$DEVKITPRO/libnx/switch.specs" -L"$DEVKITPRO/libnx/lib" $(pkg-config --static --libs sdl2) -lnx -o smoke.elf
