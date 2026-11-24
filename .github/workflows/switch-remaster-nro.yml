@@ -62,9 +62,16 @@ jobs:
           export PATH="$DEVKITPRO/devkitA64/bin:$DEVKITPRO/tools/bin:$PATH"
           archive=$(find core -name '*libretro*libnx*.a' -print -quit)
           test -n "$archive"
-          aarch64-none-elf-g++ -std=c++17 -O2 -D__SWITCH__ -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE -I"$DEVKITPRO/libnx/include" -I"$DEVKITPRO/portlibs/switch/include" remaster/switch_main.cpp -specs="$DEVKITPRO/libnx/switch.specs" -L"$DEVKITPRO/portlibs/switch/lib" -L"$DEVKITPRO/libnx/lib" -Wl,--start-group "$archive" support/libsupport.a -lEGL -lglapi -ldrm_nouveau -lglapi -lGLESv2 -lz -lbz2 -lnx -lm -Wl,--end-group -o remaster.elf
+          git clone --depth 1 https://github.com/switchbrew/switch-examples.git official
+          mkdir -p native/source
+          cp official/templates/application/Makefile native/Makefile
+          cp remaster/*.hpp remaster/switch_main.cpp native/source/
+          cp "$archive" native/libmame.a
+          cp support/libsupport.a native/libsupport.a
+          sed -i -E 's/^TARGET[[:space:]]*:=.*/TARGET := Street-Fighter-Remaster/; s/^CXXFLAGS[[:space:]]*:=.*/CXXFLAGS := $(CFLAGS) -std=c++17 -fexceptions/; s@^LIBS[[:space:]]*:=.*@LIBS := -Wl,--start-group $(TOPDIR)/libmame.a $(TOPDIR)/libsupport.a -lEGL -lglapi -ldrm_nouveau -lGLESv2 -lz -lbz2 -lnx -lm -Wl,--end-group@' native/Makefile
+          make -C native -j2 APP_TITLE="Street Fighter Remaster" APP_AUTHOR="SFTM Project" APP_VERSION="0.2"
           mkdir -p output/switch/sftm
-          elf2nro remaster.elf output/switch/sftm/Street-Fighter-Remaster.nro
+          cp native/Street-Fighter-Remaster.nro output/switch/sftm/
           cp remaster/shaders/hd.vert remaster/shaders/hd.frag output/switch/sftm/
           test -s output/switch/sftm/Street-Fighter-Remaster.nro
       - uses: actions/upload-artifact@v4
