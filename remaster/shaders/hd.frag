@@ -17,14 +17,15 @@ void main(){
  vec3 b=texelFetch(sourceFrame,clamp(i+ivec2(1,0),ivec2(0),hi),0).rgb;
  vec3 c=texelFetch(sourceFrame,clamp(i+ivec2(0,1),ivec2(0),hi),0).rgb;
  vec3 d=texelFetch(sourceFrame,clamp(i+ivec2(1,1),ivec2(0),hi),0).rgb;
+ if(strength<=0.0){fragColor=vec4(f.y<0.5?(f.x<0.5?a:b):(f.x<0.5?c:d),1.0);return;}
  vec3 smoothColor=mix(mix(a,b,f.x),mix(c,d,f.x),f.y);
- vec3 nearest=texelFetch(sourceFrame,clamp(ivec2(floor(p+0.5)),ivec2(0),hi),0).rgb;
+ vec3 nearest=f.y<0.5?(f.x<0.5?a:b):(f.x<0.5?c:d);
  float edge=max(max(contrast(a,b),contrast(c,d)),max(contrast(a,c),contrast(b,d)));
  float diagonalA=contrast(a,d), diagonalB=contrast(b,c);
  float diagonalWeight=smoothstep(0.025,0.16,abs(diagonalA-diagonalB));
  vec3 diagonal=diagonalA<diagonalB?mix(a,d,clamp((f.x+f.y)*0.5,0.0,1.0)):mix(b,c,clamp((1.0-f.x+f.y)*0.5,0.0,1.0));
  float proximity=diagonalA<diagonalB?1.0-abs(f.x-f.y):1.0-abs(f.x+f.y-1.0);
- smoothColor=mix(smoothColor,diagonal,0.45*diagonalWeight*(proximity*proximity*proximity*proximity));
+ smoothColor=mix(smoothColor,diagonal,0.60*diagonalWeight*(proximity*proximity*proximity*proximity));
  vec3 lo=min(min(a,b),min(c,d)), hiColor=max(max(a,b),max(c,d));
  float detail=1.0-smoothstep(0.08,0.30,edge);
  vec3 localMean=(a+b+c+d)*0.25;
