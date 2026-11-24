@@ -44,7 +44,7 @@ jobs:
           common=$(find core -type d -name libretro-common -print -quit)
           test -n "$common"
           mkdir -p support
-          for dir in file streams vfs string encodings compat time; do
+          for dir in file streams vfs string encodings compat time features; do
             if [ -d "$common/$dir" ]; then
               for src in "$common/$dir/"*.c; do
                 [ -f "$src" ] || continue
