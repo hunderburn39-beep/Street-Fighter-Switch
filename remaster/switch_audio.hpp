@@ -38,7 +38,7 @@ class SwitchAudio {
   }
   for(auto& s:slots)if(!s.busy){
    std::memcpy(s.memory,pending.data(),bytes);
-   s.buffer.next=nullptr;s.buffer.data=s.memory;s.buffer.buffer_size=bytes;
+   s.buffer.next=nullptr;s.buffer.buffer=s.memory;s.buffer.buffer_size=bytes;
    s.buffer.data_size=bytes;s.buffer.data_offset=0;
    if(R_SUCCEEDED(audoutAppendAudioOutBuffer(&s.buffer)))s.busy=true;
    break;
