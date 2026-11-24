@@ -14,24 +14,24 @@ jobs:
           ref: mame0276
           path: mame
       - name: Dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential python3 libsdl2-dev libsdl2-ttf-dev libfontconfig1-dev libasound2-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 libsdl2-dev libsdl2-ttf-dev libx11-dev libfontconfig1-dev libasound2-dev pkg-config
       - name: Compile ITech32
         working-directory: mame
         run: |
           set -o pipefail
-          make -j2 SUBTARGET=sftm SOURCES=src/mame/itech/itech32.cpp NO_OPENGL=1 NO_X11=1 USE_QTDEBUG=0 NO_USE_PORTAUDIO=1 NO_USE_PULSEAUDIO=1 NO_USE_MIDI=1 2>&1 | tee build.log
+          make -j2 SUBTARGET=sftm SOURCES=src/mame/itech/itech32.cpp NO_OPENGL=1 NO_X11=0 USE_QTDEBUG=0 NO_USE_PORTAUDIO=1 NO_USE_PULSEAUDIO=1 NO_USE_MIDI=1 2>&1 | tee build.log
       - name: Verify driver
         working-directory: mame
         run: |
-          ./mamesftm -listfull sftm | tee driver.txt
+          ./sftm -listfull sftm | tee driver.txt
           grep -q 'Street Fighter' driver.txt
-          ./mamesftm -listroms sftm > roms.txt
+          ./sftm -listroms sftm > roms.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: sftm-linux
           path: |
-            mame/mamesftm
+            mame/sftm
             mame/build.log
             mame/driver.txt
             mame/roms.txt
