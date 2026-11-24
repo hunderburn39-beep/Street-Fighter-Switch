@@ -3,6 +3,10 @@
 #include "libretro_video.hpp"
 #include "frame_clock.hpp"
 #include <thread>
+#ifdef __SWITCH__
+struct NativeAvInfo { unsigned base_width,base_height,max_width,max_height; float aspect_ratio; double fps,sample_rate; };
+extern "C" void retro_get_system_av_info(NativeAvInfo*);
+#endif
 class RuntimeSession {
  CoreLoader& core;
  FrameClock clock;
@@ -25,7 +29,12 @@ public:
    core.set_input_poll(poll);core.set_input_state(input);
    core.init();initialized=true;
    if(!core.load_game(&game))throw std::runtime_error("Game load failed");
-   loaded=true;clock.reset();
+   loaded=true;
+#ifdef __SWITCH__
+   NativeAvInfo av{};retro_get_system_av_info(&av);
+   clock=FrameClock(av.fps);
+#endif
+   clock.reset();
   } catch(...) { close();throw; }
  }
  RuntimeSession(const RuntimeSession&)=delete;
