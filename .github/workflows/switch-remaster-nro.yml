@@ -1,0 +1,32 @@
+name: Build Switch Remaster NRO
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.github/workflows/switch-remaster-nro.yml','remaster/switch*','remaster/*.hpp']
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: dkp-pacman -S --needed --noconfirm switch-mesa switch-zlib switch-bzip2 switch-libpng switch-libjpeg-turbo
+      - name: Build static core
+        run: |
+          git clone --depth 1 https://github.com/libretro/mame2003-plus-libretro.git core
+          make -C core platform=libnx -j2
+      - name: Compile and link native frontend
+        shell: bash
+        run: |
+          set -eux
+          export PATH="$DEVKITPRO/devkitA64/bin:$DEVKITPRO/tools/bin:$PATH"
+          archive=$(find core -name '*libretro*libnx*.a' -print -quit)
+          test -n "$archive"
+          aarch64-none-elf-g++ -std=c++17 -O2 -D__SWITCH__ -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE -I"$DEVKITPRO/libnx/include" -I"$DEVKITPRO/portlibs/switch/include" remaster/switch_main.cpp -specs="$DEVKITPRO/libnx/switch.specs" -L"$DEVKITPRO/portlibs/switch/lib" -L"$DEVKITPRO/libnx/lib" -Wl,--start-group "$archive" -lEGL -lglapi -ldrm_nouveau -lnouveau -lGL -lz -lbz2 -lnx -lm -Wl,--end-group -o remaster.elf
+          mkdir -p output/switch/sftm
+          elf2nro remaster.elf output/switch/sftm/Street-Fighter-Remaster.nro
+          cp remaster/shaders/hd.vert remaster/shaders/hd.frag output/switch/sftm/
+          test -s output/switch/sftm/Street-Fighter-Remaster.nro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Street-Fighter-Remaster-Switch
+          path: output/
