@@ -61,6 +61,21 @@ static GLuint shader(GLenum type,const char* path){
  if(!ok){glDeleteShader(id);throw std::runtime_error("Shader compile failed");}
  return id;
 }
+
+// Tiny GPU overlay using scissored clears, no texture allocation.
+static void modeOverlay(bool hd){
+ const char* label=hd?"HD REMASTER":"ORIGINAL";
+ const char* alphabet="ADEGHILMNORST";
+ const unsigned glyphs[]={0x1F8FE,0x1E63E,0x1F83F,0x1F6FE,0x11F71,0x1F11F,0x1083F,0x1BF71,0x1B771,0x1F631,0x1EFA9,0x1F07F,0x1F084};
+ // Explicit 5x7 glyph rows.
+ const char* rows[]={"01110""10001""10001""11111""10001""10001""10001","11110""10001""10001""10001""10001""10001""11110","11111""10000""10000""11110""10000""10000""11111","01110""10001""10000""10111""10001""10001""01110","10001""10001""10001""11111""10001""10001""10001","11111""00100""00100""00100""00100""00100""11111","10000""10000""10000""10000""10000""10000""11111","10001""11011""10101""10101""10001""10001""10001","10001""11001""10101""10011""10001""10001""10001","01110""10001""10001""10001""10001""10001""01110","11110""10001""10001""11110""10100""10010""10001","01111""10000""10000""01110""00001""00001""11110","11111""00100""00100""00100""00100""00100""00100"};
+ int n=int(std::strlen(label)), x=640-n*12;
+ glEnable(GL_SCISSOR_TEST);glScissor(x-12,650,n*24+24,48);glClearColor(0.04f,0.04f,0.04f,1);glClear(GL_COLOR_BUFFER_BIT);
+ glClearColor(1,1,1,1);
+ for(int k=0;k<n;++k){const char* at=std::strchr(alphabet,label[k]);if(!at)continue;const char* r=rows[at-alphabet];for(int y=0;y<7;++y)for(int c=0;c<5;++c)if(r[y*5+c]=='1'){glScissor(x+k*24+c*4,660+(6-y)*4,4,4);glClear(GL_COLOR_BUFFER_BIT);}}
+ glDisable(GL_SCISSOR_TEST);
+}
+
 int main(){
  if(FILE* f=std::fopen("sdmc:/switch/sftm/sftm-debug.log","w")){std::fputs("SFTM diagnostic GLES3\n",f);std::fclose(f);}
  trace("main entered");
@@ -87,14 +102,14 @@ int main(){
  SwitchAudio::batch,SwitchInput::poll,SwitchInput::state,game);
  trace("session ok; first frame begin");
  bool first=true, hd=true, previousChord=false;
- unsigned perfFrames=0;
+ unsigned perfFrames=0, overlayFrames=90;
  auto perfStart=std::chrono::steady_clock::now();
  double stepMs=0,presentMs=0;
  while(appletMainLoop()){
  SwitchInput::poll();if(SwitchInput::exitRequested())break;
- bool chord=SwitchInput::graphicsChord();if(chord&&!previousChord){hd=!hd;trace(hd?"GRAPHICS HD":"GRAPHICS ORIGINAL");}previousChord=chord;
+ bool chord=SwitchInput::graphicsChord();if(chord&&!previousChord){hd=!hd;overlayFrames=90;trace(hd?"GRAPHICS HD":"GRAPHICS ORIGINAL");}previousChord=chord;
  auto t0=std::chrono::steady_clock::now();session.step();auto t1=std::chrono::steady_clock::now();if(first)trace("first core frame ok");glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
- renderer.draw(160,0,960,720,hd);graphics.present();auto t2=std::chrono::steady_clock::now();
+ renderer.draw(160,0,960,720,hd);if(overlayFrames){modeOverlay(hd);--overlayFrames;}graphics.present();auto t2=std::chrono::steady_clock::now();
  stepMs+=std::chrono::duration<double,std::milli>(t1-t0).count();presentMs+=std::chrono::duration<double,std::milli>(t2-t1).count();
  if(++perfFrames==300){double elapsed=std::chrono::duration<double>(t2-perfStart).count();char msg[160];std::snprintf(msg,sizeof(msg),"PERF fps=%.2f step_ms=%.2f render_ms=%.2f",300/elapsed,stepMs/300,presentMs/300);trace(msg);perfFrames=0;stepMs=presentMs=0;perfStart=t2;}
  if(first){trace("first presentation ok");first=false;}
