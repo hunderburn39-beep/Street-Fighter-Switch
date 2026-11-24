@@ -4,7 +4,7 @@
 #include <sstream>
 #include <iostream>
 static unsigned samples=0,polls=0,inputs=0;
-static bool env(unsigned cmd,void* data){return cmd==10&&data&&*static_cast<unsigned*>(data)==2;}
+static bool env(unsigned cmd,void* data){return cmd==10&&data&&LibretroVideo::setFormat(*static_cast<unsigned*>(data));}
 static void audio(int16_t,int16_t){++samples;}
 static std::size_t batch(const int16_t*,std::size_t n){samples+=n;return n;}
 static void poll(){++polls;}
