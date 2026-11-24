@@ -1,0 +1,16 @@
+name: Validate remaster renderer
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'remaster/**'
+      - '.github/workflows/remaster-renderer.yml'
+jobs:
+  compile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y g++ libglew-dev libgl-dev glslang-tools
+      - run: glslangValidator -l remaster/shaders/hd.vert remaster/shaders/hd.frag
+      - run: g++ -std=c++17 -Wall -Wextra -Werror remaster/tests/compile.cpp -o renderer-test -lGLEW -lGL
+      - run: ./renderer-test
