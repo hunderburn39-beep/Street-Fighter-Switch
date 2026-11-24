@@ -10,7 +10,7 @@
 class SwitchAudio {
  static constexpr size_t frames=1024, bytes=frames*4;
  struct Slot { AudioOutBuffer buffer{}; void* memory=nullptr; bool busy=false; };
- std::array<Slot,4> slots{};
+ std::array<Slot,6> slots{};
  std::array<int16_t,frames*2> pending{};
  size_t used=0;
  double ratio=1.0, phase=0.0;
@@ -33,6 +33,9 @@ class SwitchAudio {
  }
  void flush(){
   reclaim();
+  for(unsigned attempt=0;attempt<4 && std::all_of(slots.begin(),slots.end(),[](const Slot& s){return s.busy;});++attempt){
+   svcSleepThread(1000000);reclaim();
+  }
   for(auto& s:slots)if(!s.busy){
    std::memcpy(s.memory,pending.data(),bytes);
    s.buffer.next=nullptr;s.buffer.data=s.memory;s.buffer.buffer_size=bytes;
