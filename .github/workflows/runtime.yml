@@ -1,0 +1,20 @@
+name: Package Linux runtime dependencies
+on:
+  push:
+    paths: ['.github/workflows/runtime.yml']
+  workflow_dispatch:
+jobs:
+  runtime:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download SDL TTF runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-ttf-2.0-0
+          mkdir runtime
+          cp -L /usr/lib/x86_64-linux-gnu/libSDL2_ttf-2.0.so.0 runtime/
+          ldd runtime/libSDL2_ttf-2.0.so.0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sftm-runtime
+          path: runtime/
