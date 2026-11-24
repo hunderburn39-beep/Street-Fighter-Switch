@@ -13,6 +13,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: dkp-pacman -S --needed --noconfirm switch-mesa switch-zlib switch-bzip2 switch-libpng switch-libjpeg-turbo
+      - name: Inspect Mesa libraries
+        run: |
+          ls -l "$DEVKITPRO/portlibs/switch/lib/"*GL* "$DEVKITPRO/portlibs/switch/lib/"*nouveau* || true
+          test -f "$DEVKITPRO/portlibs/switch/lib/libGLESv2.a"
       - name: Build static core
         run: |
           git clone --depth 1 https://github.com/libretro/mame2003-plus-libretro.git core
@@ -24,7 +28,7 @@ jobs:
           export PATH="$DEVKITPRO/devkitA64/bin:$DEVKITPRO/tools/bin:$PATH"
           archive=$(find core -name '*libretro*libnx*.a' -print -quit)
           test -n "$archive"
-          aarch64-none-elf-g++ -std=c++17 -O2 -D__SWITCH__ -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE -I"$DEVKITPRO/libnx/include" -I"$DEVKITPRO/portlibs/switch/include" remaster/switch_main.cpp -specs="$DEVKITPRO/libnx/switch.specs" -L"$DEVKITPRO/portlibs/switch/lib" -L"$DEVKITPRO/libnx/lib" -Wl,--start-group "$archive" -lEGL -lglapi -ldrm_nouveau -lnouveau -lGL -lz -lbz2 -lnx -lm -Wl,--end-group -o remaster.elf
+          aarch64-none-elf-g++ -std=c++17 -O2 -D__SWITCH__ -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE -I"$DEVKITPRO/libnx/include" -I"$DEVKITPRO/portlibs/switch/include" remaster/switch_main.cpp -specs="$DEVKITPRO/libnx/switch.specs" -L"$DEVKITPRO/portlibs/switch/lib" -L"$DEVKITPRO/libnx/lib" -Wl,--start-group "$archive" -lEGL -lglapi -ldrm_nouveau -lglapi -lGLESv2 -lz -lbz2 -lnx -lm -Wl,--end-group -o remaster.elf
           mkdir -p output/switch/sftm
           elf2nro remaster.elf output/switch/sftm/Street-Fighter-Remaster.nro
           cp remaster/shaders/hd.vert remaster/shaders/hd.frag output/switch/sftm/
