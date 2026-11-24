@@ -3,7 +3,7 @@ import argparse
 from pathlib import Path
 from PIL import Image, ImageFilter, ImageChops
 
-def restore(image, scale=4):
+def restore(image, scale=4, indexed=False):
     rgba = image.convert("RGBA")
     size = tuple(v*scale for v in rgba.size)
     # Premultiplied alpha prevents transparent RGB bleeding.
@@ -14,6 +14,8 @@ def restore(image, scale=4):
     interior = alpha.filter(ImageFilter.MinFilter(5))
     rgb = Image.composite(sharp, rgb, interior)
     rgb.putalpha(alpha)
+    if not indexed:
+        return rgb
     # Preserve indexed 256-colour output, reserving index 255 for transparency.
     mask = alpha.point(lambda v: 255 if v >= 128 else 0)
     if mask.getextrema() == (255, 255):
@@ -29,13 +31,14 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("source", type=Path)
     p.add_argument("output", type=Path)
-    p.add_argument("--scale", type=int, choices=[2,4], default=4)
+    p.add_argument("--scale", type=int, choices=[2,4,8], default=4)
+    p.add_argument('--indexed', action='store_true', help='Legacy 256-color output')
     a = p.parse_args()
     a.output.mkdir(parents=True, exist_ok=True)
     count = 0
     for path in sorted(a.source.glob("*.png")):
         with Image.open(path) as im:
-            restore(im,a.scale).save(a.output/path.name)
+            restore(im,a.scale,a.indexed).save(a.output/path.name)
         count += 1
     print(f"Restored {count} textures")
 
