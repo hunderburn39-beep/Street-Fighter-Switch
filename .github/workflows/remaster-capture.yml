@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '.github/workflows/remaster-capture.yml'
+      - 'tools/instrument_itech32.py'
 jobs:
   capture-core:
     runs-on: ubuntu-22.04
@@ -16,6 +17,10 @@ jobs:
           git -C core checkout FETCH_HEAD
       - name: Install graphics capture hook
         run: python3 tools/instrument_itech32.py core/src/vidhrdw/itech32_vidhrdw.c
+      - name: Verify temporal hook
+        run: |
+          grep -q 'sftm-timeline.tsv' core/src/vidhrdw/itech32_vidhrdw.c
+          grep -q 'remaster_frame++' core/src/vidhrdw/itech32_vidhrdw.c
       - name: Compile instrumented core
         run: make -C core platform=unix -j2
       - name: Collect binary
