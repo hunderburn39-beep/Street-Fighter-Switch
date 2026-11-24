@@ -1,0 +1,27 @@
+name: Switch remaster ARM64 validation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'remaster/**'
+      - '.github/workflows/switch-remaster.yml'
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install graphics headers
+        run: dkp-pacman -S --needed --noconfirm switch-mesa
+      - name: Cross compile runtime interfaces
+        shell: bash
+        run: |
+          set -eux
+          export PATH="$DEVKITPRO/devkitA64/bin:$DEVKITPRO/tools/bin:$PATH"
+          printf '#include "runtime_session.hpp"\nvoid check(FrameRenderer& r, RuntimeSession& s){s.step();r.draw(0,0,1280,720,true);}\n' > switch-check.cpp
+          aarch64-none-elf-g++ -std=c++17 -Wall -Wextra -Werror -D__SWITCH__ -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -Iremaster -I"$DEVKITPRO/libnx/include" -I"$DEVKITPRO/portlibs/switch/include" -c switch-check.cpp -o switch-check.o
+          aarch64-none-elf-readelf -h switch-check.o
+      - uses: actions/upload-artifact@v4
+        with:
+          name: switch-remaster-objects
+          path: switch-check.o
