@@ -7,10 +7,12 @@
 #include <fstream>
 #include <sstream>
 #include <cstdarg>
+#include <cstring>
 static void trace(const char* msg){
  if(FILE* f=std::fopen("sdmc:/switch/sftm/sftm-debug.log","a")){std::fprintf(f,"%s\n",msg);std::fflush(f);std::fclose(f);}
 }
 static void coreLog(int level,const char* fmt,...){
+ if(std::strstr(fmt,"set_irq_line"))return;
  if(FILE* f=std::fopen("sdmc:/switch/sftm/sftm-debug.log","a")){std::fprintf(f,"core[%d]: ",level);va_list ap;va_start(ap,fmt);std::vfprintf(f,fmt,ap);va_end(ap);std::fflush(f);std::fclose(f);}
 }
 static bool environment(unsigned cmd,void* data){
@@ -61,7 +63,7 @@ int main(){
  while(appletMainLoop()){
  SwitchInput::poll();if(SwitchInput::exitRequested())break;
  session.step();if(first)trace("first core frame ok");glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
- renderer.draw(160,0,960,720,true);graphics.present();if(first){trace("first presentation ok");first=false;}
+ renderer.draw(160,0,960,720,false);graphics.present();if(first){trace("first presentation ok");first=false;}
  }}
  renderer.release();glDeleteProgram(p);glDeleteShader(v);glDeleteShader(f);
  }catch(const std::exception& e){
