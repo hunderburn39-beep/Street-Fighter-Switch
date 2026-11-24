@@ -12,7 +12,7 @@
 class FrameRenderer {
  GLuint tex=0, vao=0, program=0;
  GLint strength=-1;
- int w=0,h=0;
+ int w=0,h=0; bool lastRgba=false;
 public:
  FrameRenderer()=default;
  FrameRenderer(const FrameRenderer&)=delete;
@@ -32,15 +32,15 @@ public:
   strength=glGetUniformLocation(program,"strength");
  }
  // RGB565 native-endian input; pitch is measured in bytes.
- void upload(const void* pixels,int width,int height,int pitch){
-  if(!tex || !pixels || width<=0 || height<=0 || pitch/2<width || pitch%2) throw std::runtime_error("Invalid frame");
+ void upload(const void* pixels,int width,int height,int pitch,bool rgba=false){
+  if(!tex || !pixels || width<=0 || height<=0 || pitch/(rgba?4:2)<width || pitch%(rgba?4:2)) throw std::runtime_error("Invalid frame");
   glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D,tex);
   glPixelStorei(GL_UNPACK_ALIGNMENT,1);
-  glPixelStorei(GL_UNPACK_ROW_LENGTH,pitch/2);
-  if(w!=width || h!=height){
-   w=width;h=height;
-   glTexImage2D(GL_TEXTURE_2D,0,GL_RGB565,w,h,0,GL_RGB,GL_UNSIGNED_SHORT_5_6_5,pixels);
-  }else glTexSubImage2D(GL_TEXTURE_2D,0,0,0,w,h,GL_RGB,GL_UNSIGNED_SHORT_5_6_5,pixels);
+  glPixelStorei(GL_UNPACK_ROW_LENGTH,pitch/(rgba?4:2));
+  if(w!=width || h!=height || lastRgba!=rgba){
+   w=width;h=height;lastRgba=rgba;
+   glTexImage2D(GL_TEXTURE_2D,0,rgba?GL_RGBA8:GL_RGB565,w,h,0,rgba?GL_RGBA:GL_RGB,rgba?GL_UNSIGNED_BYTE:GL_UNSIGNED_SHORT_5_6_5,pixels);
+  }else glTexSubImage2D(GL_TEXTURE_2D,0,0,0,w,h,rgba?GL_RGBA:GL_RGB,rgba?GL_UNSIGNED_BYTE:GL_UNSIGNED_SHORT_5_6_5,pixels);
   glPixelStorei(GL_UNPACK_ROW_LENGTH,0);glPixelStorei(GL_UNPACK_ALIGNMENT,4);
   if(glGetError()!=GL_NO_ERROR){w=h=0;throw std::runtime_error("Texture upload failed");}
  }
