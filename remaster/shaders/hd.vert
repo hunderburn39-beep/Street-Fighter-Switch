@@ -1,4 +1,5 @@
-#version 330 core
+#version 300 es
+precision highp float;
 out vec2 uv;
 void main(){
  vec2 p=vec2(float((gl_VertexID << 1) & 2),float(gl_VertexID & 2));
