@@ -3,8 +3,8 @@
 #ifndef GL_GLEXT_PROTOTYPES
 #define GL_GLEXT_PROTOTYPES 1
 #endif
-#include <GL/gl.h>
-#include <GL/glext.h>
+#include <GLES3/gl3.h>
+#include <GLES3/gl3ext.h>
 #else
 #include <GL/glew.h>
 #endif
