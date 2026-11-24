@@ -1,0 +1,30 @@
+name: CPU neural restoration
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/restore_cpu.py'
+      - '.github/workflows/cpu-neural.yml'
+jobs:
+  inference:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: pip install torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install 'numpy<2' basicsr==1.4.2 Pillow
+      - name: Download model
+        run: curl -fL --retry 3 https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth -o weights.pth
+      - name: Validate CPU inference
+        run: |
+          mkdir -p sample
+          python -c "from PIL import Image, ImageDraw; im=Image.new('RGBA',(64,64)); ImageDraw.Draw(im).ellipse((8,8,55,55),fill=(180,110,75,255)); im.save('sample/test.png')"
+          python tools/restore_cpu.py sample restored --weights weights.pth
+          python -c "from PIL import Image; im=Image.open('restored/test.png'); assert im.mode=='RGBA' and im.size==(256,256); assert im.getchannel('A').getextrema()==(0,255)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cpu-neural-test
+          path: restored/
