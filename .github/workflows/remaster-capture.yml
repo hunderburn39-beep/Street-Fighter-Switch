@@ -1,0 +1,27 @@
+name: Remaster capture core
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/remaster-capture.yml'
+jobs:
+  capture-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch original emulator source
+        run: git clone --depth 1 https://github.com/libretro/mame2003-plus-libretro.git core
+      - name: Install graphics capture hook
+        run: python3 tools/instrument_itech32.py core/src/vidhrdw/itech32_vidhrdw.c
+      - name: Compile instrumented core
+        run: make -C core platform=unix -j2
+      - name: Collect binary
+        run: |
+          mkdir -p output
+          cp core/mame2003_plus_libretro.so output/
+          test -s output/mame2003_plus_libretro.so
+          git -C core rev-parse HEAD > output/upstream-commit.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: remaster-capture-linux
+          path: output/
