@@ -2,7 +2,10 @@ name: Build Switch Remaster NRO
 on:
   workflow_dispatch:
   push:
-    paths: ['.github/workflows/switch-remaster-nro.yml','remaster/switch*','remaster/*.hpp']
+    paths: ['.github/workflows/switch-remaster-nro.yml','remaster/switch*','remaster/*.hpp','remaster/shaders/**']
+concurrency:
+  group: switch-remaster-nro-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
