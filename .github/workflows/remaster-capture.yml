@@ -1,4 +1,5 @@
 name: Remaster capture core
+# Rebuild isolated capture core for sprite identification.
 on:
   workflow_dispatch:
   push:
