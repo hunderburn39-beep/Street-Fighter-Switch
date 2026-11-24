@@ -1,5 +1,13 @@
 #pragma once
+#ifdef __SWITCH__
+#ifndef GL_GLEXT_PROTOTYPES
+#define GL_GLEXT_PROTOTYPES 1
+#endif
+#include <GL/gl.h>
+#include <GL/glext.h>
+#else
 #include <GL/glew.h>
+#endif
 #include <stdexcept>
 class FrameRenderer {
  GLuint tex=0, vao=0, program=0;
