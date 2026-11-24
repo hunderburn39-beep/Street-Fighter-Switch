@@ -36,8 +36,29 @@ def main():
     p.add_argument("--models", type=Path, required=True)
     a = p.parse_args()
     a.output.mkdir(parents=True, exist_ok=True)
-    for source in sorted(a.source.glob("*.png")):
-        restore(source, a.output/source.name, a.executable.resolve(), a.models.resolve())
+    pths = sorted(a.source.glob("*.png"))
+    if not pths:
+        raise SystemExit("No input sprites found")
+    failures = []
+    for i, source in enumerate(pths, 1):
+        dest = a.output/source.name
+        try:
+            if dest.exists():
+                with Image.open(source) as original, Image.open(dest) as existing:
+                    valid = existing.mode == "RGBA" and existing.size == (original.width*4, original.height*4)
+                    existing.load()
+                if valid:
+                    continue
+            pending = dest.with_suffix(".pending.png")
+            restore(source, pending, a.executable.resolve(), a.models.resolve())
+            pending.replace(dest)
+            print(f"{i}/{len(pths)} {source.name}", flush=True)
+        except (OSError, ValueError, subprocess.CalledProcessError) as exc:
+            failures.append((source.name, str(exc)))
+    import json
+    (a.output/"failures.json").write_text(json.dumps(failures, indent=2))
+    if failures:
+        raise SystemExit(f"{len(failures)} sprites failed")
 
 if __name__ == "__main__":
     main()
