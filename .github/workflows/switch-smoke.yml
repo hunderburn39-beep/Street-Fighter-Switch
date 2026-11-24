@@ -1,0 +1,50 @@
+name: Switch NRO smoke test
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.github/workflows/switch-smoke.yml']
+jobs:
+  nro:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkita64:latest
+    steps:
+      - name: Build platform smoke test
+        shell: bash
+        run: |
+          set -eux
+          dkp-pacman -S --needed --noconfirm switch-sdl2
+          export PATH="$DEVKITPRO/devkitA64/bin:$DEVKITPRO/tools/bin:$PATH"
+          export PKG_CONFIG_PATH="$DEVKITPRO/portlibs/switch/lib/pkgconfig"
+          cat > smoke.cpp <<'EOF'
+          #include <switch.h>
+          #include <SDL2/SDL.h>
+          int main(int argc, char **argv) {
+            if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0) return 1;
+            SDL_Window *w = SDL_CreateWindow("SFTM platform test",0,0,1280,720,0);
+            if (!w) { SDL_Quit(); return 2; }
+            SDL_Renderer *r = SDL_CreateRenderer(w,-1,0);
+            if (!r) { SDL_DestroyWindow(w); SDL_Quit(); return 3; }
+            SDL_GameController *pad = nullptr;
+            for(int i=0;i<SDL_NumJoysticks();++i) if(SDL_IsGameController(i)) {pad=SDL_GameControllerOpen(i); if(pad) break;}
+            SDL_AudioSpec want{}; want.freq=48000; want.format=AUDIO_S16SYS; want.channels=2; want.samples=1024;
+            SDL_AudioDeviceID audio=SDL_OpenAudioDevice(nullptr,0,&want,nullptr,0);
+            if(audio) SDL_PauseAudioDevice(audio,0);
+            bool running=true;
+            while(running && appletMainLoop()) {
+              SDL_Event e;
+              while(SDL_PollEvent(&e)) if(e.type==SDL_QUIT || (e.type==SDL_CONTROLLERBUTTONDOWN && e.cbutton.button==SDL_CONTROLLER_BUTTON_START)) running=false;
+              SDL_SetRenderDrawColor(r,audio?0:120,pad?120:0,80,255);
+              SDL_RenderClear(r); SDL_RenderPresent(r); SDL_Delay(16);
+            }
+            if(audio) SDL_CloseAudioDevice(audio);
+            if(pad) SDL_GameControllerClose(pad);
+            SDL_DestroyRenderer(r); SDL_DestroyWindow(w); SDL_Quit(); return 0;
+          }
+          EOF
+          aarch64-none-elf-g++ -O2 -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE -D__SWITCH__ -I"$DEVKITPRO/libnx/include" $(pkg-config --cflags sdl2) smoke.cpp -specs="$DEVKITPRO/libnx/switch.specs" -L"$DEVKITPRO/libnx/lib" $(pkg-config --static --libs sdl2) -lnx -o smoke.elf
+          elf2nro smoke.elf sftm-platform-test.nro
+          test -s sftm-platform-test.nro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: switch-platform-test
+          path: sftm-platform-test.nro
