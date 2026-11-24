@@ -1,0 +1,37 @@
+name: Neural restoration validation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/restore_neural.py'
+      - '.github/workflows/neural-validation.yml'
+jobs:
+  inference:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install Pillow
+      - name: Install Vulkan software driver and model
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers libvulkan1
+          curl -fL --retry 3 https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip -o neural.zip
+          unzip -q neural.zip -d neural
+          find neural -name realesrgan-ncnn-vulkan -exec chmod +x {} +
+      - name: Run actual neural inference
+        run: |
+          mkdir -p sample restored
+          python -c "from PIL import Image, ImageDraw; im=Image.new('RGBA',(64,64)); ImageDraw.Draw(im).ellipse((8,8,55,55),fill=(180,110,75,255)); im.save('sample/test.png')"
+          BIN=$(find neural -type f -name realesrgan-ncnn-vulkan | head -1)
+          MODELS=$(dirname "$(find neural -name realesrgan-x4plus.param | head -1)")
+          test -n "$BIN"
+          test -f "$MODELS/realesrgan-x4plus.bin"
+          python tools/restore_neural.py sample restored --executable "$BIN" --models "$MODELS"
+          python -c "from PIL import Image; im=Image.open('restored/test.png'); assert im.size==(256,256) and im.mode=='RGBA'; assert im.getchannel('A').getextrema()==(0,255)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neural-smoke-test
+          path: restored/
