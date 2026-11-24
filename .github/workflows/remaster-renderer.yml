@@ -10,7 +10,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y g++ libglew-dev libgl-dev glslang-tools
+      - run: sudo apt-get update && sudo apt-get install -y g++ libglew-dev libgl-dev glslang-tools libsdl2-dev xvfb xauth libgl1-mesa-dri
       - run: glslangValidator -l remaster/shaders/hd.vert remaster/shaders/hd.frag
       - run: g++ -std=c++17 -Wall -Wextra -Werror remaster/tests/compile.cpp -o renderer-test -lGLEW -lGL
       - run: ./renderer-test
+
+      - run: g++ -std=c++17 -Wall -Wextra -Werror remaster/tests/gl_runtime.cpp -o gl-runtime -lSDL2 -lGLEW -lGL
+      - run: xvfb-run -a ./gl-runtime
