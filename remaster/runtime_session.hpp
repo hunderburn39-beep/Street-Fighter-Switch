@@ -3,6 +3,8 @@
 #include "libretro_video.hpp"
 #include "frame_clock.hpp"
 #include <thread>
+#include <cmath>
+#include <cstdio>
 #ifdef __SWITCH__
 #include "switch_audio.hpp"
 struct NativeAvInfo { unsigned base_width,base_height,max_width,max_height; float aspect_ratio; double fps,sample_rate; };
@@ -34,7 +36,13 @@ public:
 #ifdef __SWITCH__
    NativeAvInfo av{};retro_get_system_av_info(&av);
    clock=FrameClock(av.fps);
-   SwitchAudio::setSourceRate(av.sample_rate);
+   const bool validRate=std::isfinite(av.sample_rate)&&av.sample_rate>=1000&&av.sample_rate<=384000;
+   const double sourceRate=validRate?av.sample_rate:48000.0;
+   if(FILE* log=std::fopen("sdmc:/switch/sftm/sftm-debug.log","a")){
+    std::fprintf(log,"AV: fps=%.6f reported audio=%.6f effective audio=%.6f fallback=%d\n",av.fps,av.sample_rate,sourceRate,validRate?0:1);
+    std::fclose(log);
+   }
+   SwitchAudio::setSourceRate(sourceRate);
 #endif
    clock.reset();
   } catch(...) { close();throw; }
