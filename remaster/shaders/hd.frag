@@ -4,6 +4,7 @@ uniform float strength;
 in vec2 uv;
 out vec4 fragColor;
 float lum(vec3 c){return dot(c,vec3(0.2126,0.7152,0.0722));}
+float contrast(vec3 a,vec3 b){vec3 d=abs(a-b);return max(abs(lum(a)-lum(b)),0.65*max(d.r,max(d.g,d.b)));}
 void main(){
  vec2 size=vec2(textureSize(sourceFrame,0));
  vec2 p=uv*size-0.5;
@@ -16,6 +17,11 @@ void main(){
  vec3 d=texelFetch(sourceFrame,clamp(i+ivec2(1,1),ivec2(0),hi),0).rgb;
  vec3 smoothColor=mix(mix(a,b,f.x),mix(c,d,f.x),f.y);
  vec3 nearest=texelFetch(sourceFrame,clamp(ivec2(floor(p+0.5)),ivec2(0),hi),0).rgb;
- float edge=max(max(abs(lum(a)-lum(b)),abs(lum(c)-lum(d))),max(abs(lum(a)-lum(c)),abs(lum(b)-lum(d))));
+ float edge=max(max(contrast(a,b),contrast(c,d)),max(contrast(a,c),contrast(b,d)));
+ float diagonalA=contrast(a,d), diagonalB=contrast(b,c);
+ float diagonalWeight=smoothstep(0.025,0.16,abs(diagonalA-diagonalB));
+ vec3 diagonal=diagonalA<diagonalB?mix(a,d,clamp((f.x+f.y)*0.5,0.0,1.0)):mix(b,c,clamp((1.0-f.x+f.y)*0.5,0.0,1.0));
+ float proximity=diagonalA<diagonalB?1.0-abs(f.x-f.y):1.0-abs(f.x+f.y-1.0);
+ smoothColor=mix(smoothColor,diagonal,0.45*diagonalWeight*pow(proximity,4.0));
  fragColor=vec4(mix(nearest,mix(smoothColor,nearest,smoothstep(0.06,0.22,edge)),clamp(strength,0.0,1.0)),1.0);
 }
