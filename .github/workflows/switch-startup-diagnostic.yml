@@ -12,7 +12,7 @@ jobs:
         shell: bash
         run: |
           set -eux
-          git clone --depth 1 https://github.com/devkitPro/switch-examples.git examples
+          git clone --depth 1 https://github.com/switchbrew/switch-examples.git examples
           cd examples/templates/application
           make -j2
           cd ../../..
