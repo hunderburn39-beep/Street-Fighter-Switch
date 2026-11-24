@@ -19,6 +19,8 @@ def restore(image, scale=4):
     if mask.getextrema() == (255, 255):
         return rgb.convert("RGB").quantize(colors=256, dither=Image.Dither.NONE)
     indexed = rgb.convert("RGB").quantize(colors=255, dither=Image.Dither.NONE)
+    palette = indexed.getpalette()
+    indexed.putpalette(palette + [0] * (768 - len(palette)))
     indexed.paste(255, mask=ImageChops.invert(mask))
     indexed.info["transparency"] = 255
     return indexed
