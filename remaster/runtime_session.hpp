@@ -4,6 +4,7 @@
 #include "frame_clock.hpp"
 #include <thread>
 #ifdef __SWITCH__
+#include "switch_audio.hpp"
 struct NativeAvInfo { unsigned base_width,base_height,max_width,max_height; float aspect_ratio; double fps,sample_rate; };
 extern "C" void retro_get_system_av_info(NativeAvInfo*);
 #endif
@@ -33,6 +34,7 @@ public:
 #ifdef __SWITCH__
    NativeAvInfo av{};retro_get_system_av_info(&av);
    clock=FrameClock(av.fps);
+   SwitchAudio::setSourceRate(av.sample_rate);
 #endif
    clock.reset();
   } catch(...) { close();throw; }
