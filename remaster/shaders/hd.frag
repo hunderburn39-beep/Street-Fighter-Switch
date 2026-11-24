@@ -1,4 +1,6 @@
-#version 330 core
+#version 300 es
+precision highp float;
+precision highp int;
 uniform sampler2D sourceFrame;
 uniform float strength;
 in vec2 uv;
