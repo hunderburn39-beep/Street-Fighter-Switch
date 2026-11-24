@@ -9,12 +9,13 @@
 #include <cmath>
 #include <cstdio>
 class SwitchAudio {
- static constexpr size_t frames=1024, bytes=frames*4;
+ static constexpr size_t frames=2048, bytes=frames*4;
  struct Slot { AudioOutBuffer buffer{}; void* memory=nullptr; bool busy=false; };
  std::array<Slot,6> slots{};
  std::array<int16_t,frames*2> pending{};
  size_t used=0;
- unsigned submissions=0;
+ unsigned submissions=0, queued=0, dropped=0;
+ double outputRate=48000.0;
  double ratio=1.0, phase=0.0;
  int16_t prevL=0,prevR=0;
  bool primed=false;
@@ -43,11 +44,13 @@ class SwitchAudio {
    s.buffer.next=nullptr;s.buffer.buffer=s.memory;s.buffer.buffer_size=bytes;
    s.buffer.data_size=bytes;s.buffer.data_offset=0;
    Result rc=audoutAppendAudioOutBuffer(&s.buffer);
-   if(R_SUCCEEDED(rc))s.busy=true;
+   if(R_SUCCEEDED(rc)){s.busy=true;++queued;
+    if(!started && queued>=3){Result start=audoutStartAudioOut();if(R_FAILED(start))throw std::runtime_error("AudioOut start failed");started=true;}
+   }
    if(submissions++<8 || R_FAILED(rc)){if(FILE* log=std::fopen("sdmc:/switch/sftm/sftm-debug.log","a")){std::fprintf(log,"AUDIO append rc=%08x peak=%d\n",unsigned(rc),int(*std::max_element(pending.begin(),pending.end())));std::fclose(log);}}
-   break;
+   used=0;return;
   }
-  used=0;
+  ++dropped;used=0;
  }
  void push(int16_t l,int16_t r){
   pending[used++]=l;pending[used++]=r;
@@ -60,8 +63,8 @@ public:
    if(R_FAILED(audoutInitialize()))throw std::runtime_error("AudioOut init failed");
    initialized=true;
    for(auto& s:slots){s.memory=std::aligned_alloc(4096,bytes);if(!s.memory)throw std::bad_alloc();}
-   if(R_FAILED(audoutStartAudioOut()))throw std::runtime_error("AudioOut start failed");
-   started=true;instance=this;
+   outputRate=audoutGetSampleRate();if(outputRate<1000)outputRate=48000;
+   instance=this;
   }catch(...){close();throw;}
  }
  SwitchAudio(const SwitchAudio&)=delete;
@@ -69,11 +72,11 @@ public:
  ~SwitchAudio(){close();}
  static void setSourceRate(double rate){
   if(!std::isfinite(rate)||rate<1000||rate>384000)throw std::runtime_error("Invalid core audio rate");
-  if(instance){instance->ratio=rate/48000.0;instance->phase=0;instance->primed=false;}
+  if(instance){instance->ratio=rate/instance->outputRate;instance->phase=0;instance->primed=false;}
  }
  static void sample(int16_t l,int16_t r){if(instance)instance->convert(l,r);}
  static size_t batch(const int16_t* data,size_t n){
-  if(instance&&data)for(size_t i=0;i<n;++i)instance->convert(data[2*i],data[2*i+1]);
+  if(instance&&data){if(std::abs(instance->ratio-1.0)<1e-9){for(size_t i=0;i<n;++i)instance->push(data[2*i],data[2*i+1]);}else for(size_t i=0;i<n;++i)instance->convert(data[2*i],data[2*i+1]);}
   return n;
  }
 private:
