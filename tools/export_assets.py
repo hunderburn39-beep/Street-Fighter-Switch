@@ -9,7 +9,7 @@ from decode_sprite import decode
 def export(graphics, trace, output):
     data = graphics.read_bytes()
     output.mkdir(parents=True, exist_ok=True)
-    for folder in ("original", "rgba4x"):
+    for folder in ("original", "rgba4x", "hd2x", "hd4x"):
         (output / folder).mkdir(exist_ok=True)
     seen = {}
     errors = []
@@ -33,7 +33,11 @@ def export(graphics, trace, output):
                 im.save(output/"original"/(key+".png"))
                 rgba = im.convert("RGBA")
                 rgba.resize((w*4,h*4),Image.Resampling.NEAREST).save(output/"rgba4x"/(key+".png"))
-                seen[key] = dict(address=addr,width=w,height=h,rle=bool(rle),transparent=bool(alpha),palette_bank=bank,uses=1,scale=4)
+                for scale in (2,4):
+                    # Premultiplied alpha avoids dark fringes around transparent sprites.
+                    hd = rgba.convert("RGBa").resize((w*scale,h*scale),Image.Resampling.LANCZOS).convert("RGBA")
+                    hd.save(output/f"hd{scale}x"/(key+".png"))
+                seen[key] = dict(address=addr,width=w,height=h,rle=bool(rle),transparent=bool(alpha),palette_bank=bank,uses=1,scale=4,hd_scales=[2,4])
             except (ValueError,IndexError) as exc:
                 errors.append({"line":line_no,"error":str(exc)})
     (output/"manifest.json").write_text(json.dumps(seen,indent=2))
