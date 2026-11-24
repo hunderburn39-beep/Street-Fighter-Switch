@@ -7,12 +7,14 @@
 #include <cstdlib>
 #include <cstring>
 #include <cmath>
+#include <cstdio>
 class SwitchAudio {
  static constexpr size_t frames=1024, bytes=frames*4;
  struct Slot { AudioOutBuffer buffer{}; void* memory=nullptr; bool busy=false; };
  std::array<Slot,6> slots{};
  std::array<int16_t,frames*2> pending{};
  size_t used=0;
+ unsigned submissions=0;
  double ratio=1.0, phase=0.0;
  int16_t prevL=0,prevR=0;
  bool primed=false;
@@ -40,7 +42,9 @@ class SwitchAudio {
    std::memcpy(s.memory,pending.data(),bytes);
    s.buffer.next=nullptr;s.buffer.buffer=s.memory;s.buffer.buffer_size=bytes;
    s.buffer.data_size=bytes;s.buffer.data_offset=0;
-   if(R_SUCCEEDED(audoutAppendAudioOutBuffer(&s.buffer)))s.busy=true;
+   Result rc=audoutAppendAudioOutBuffer(&s.buffer);
+   if(R_SUCCEEDED(rc))s.busy=true;
+   if(submissions++<8 || R_FAILED(rc)){if(FILE* log=std::fopen("sdmc:/switch/sftm/sftm-debug.log","a")){std::fprintf(log,"AUDIO append rc=%08x peak=%d\n",unsigned(rc),int(*std::max_element(pending.begin(),pending.end())));std::fclose(log);}}
    break;
   }
   used=0;
