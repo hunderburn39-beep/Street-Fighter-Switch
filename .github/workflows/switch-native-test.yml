@@ -1,0 +1,39 @@
+name: Switch native diagnostic
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.github/workflows/switch-native-test.yml']
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkita64:latest
+    steps:
+      - name: Compile minimal libnx diagnostic
+        shell: bash
+        run: |
+          set -eux
+          export PATH="$DEVKITPRO/devkitA64/bin:$DEVKITPRO/tools/bin:$PATH"
+          cat > main.c <<'EOF'
+          #include <switch.h>
+          #include <stdio.h>
+          int main(void) {
+            consoleInit(NULL);
+            printf("SFTM native diagnostic\nlibnx startup OK\nPress PLUS to exit.\n");
+            padConfigureInput(1, HidNpadStyleSet_NpadStandard);
+            PadState pad;
+            padInitializeDefault(&pad);
+            while (appletMainLoop()) {
+              padUpdate(&pad);
+              if (padGetButtonsDown(&pad) & HidNpadButton_Plus) break;
+              consoleUpdate(NULL);
+            }
+            consoleExit(NULL);
+            return 0;
+          }
+          EOF
+          aarch64-none-elf-gcc -O2 -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE -D__SWITCH__ -I"$DEVKITPRO/libnx/include" main.c -specs="$DEVKITPRO/libnx/switch.specs" -L"$DEVKITPRO/libnx/lib" -lnx -o native.elf
+          elf2nro native.elf sftm-native-test.nro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sftm-native-test
+          path: sftm-native-test.nro
