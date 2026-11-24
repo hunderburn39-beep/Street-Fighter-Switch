@@ -17,3 +17,5 @@ jobs:
 
       - run: g++ -std=c++17 -Wall -Wextra -Werror remaster/tests/gl_runtime.cpp -o gl-runtime -lSDL2 -lGLEW -lGL
       - run: xvfb-run -a ./gl-runtime
+
+      - run: g++ -std=c++17 -Wall -Wextra -Werror remaster/tests/metrics.cpp -o metrics-test && ./metrics-test
