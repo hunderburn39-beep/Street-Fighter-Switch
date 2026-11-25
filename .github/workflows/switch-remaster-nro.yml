@@ -8,6 +8,7 @@ on:
         default: false
   push:
     branches: [remaster-only]
+    tags: ['remaster-v*']
     paths:
       - '.github/workflows/switch-remaster-nro.yml'
       - 'remaster/**'
@@ -129,7 +130,7 @@ jobs:
 
   release:
     needs: build
-    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    if: (github.event_name == 'workflow_dispatch' && inputs.publish) || startsWith(github.ref, 'refs/tags/remaster-v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -143,17 +144,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eux
-          tag="remaster-v0.3.${{ github.run_number }}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then tag="${GITHUB_REF_NAME}"; else tag="remaster-v0.3.${{ github.run_number }}"; fi
           cp dist/switch/sftm/Street-Fighter-Remaster.nro Street-Fighter-Remaster.nro
           cat > notes.md <<'EOF'
-          Remaster-only Nintendo Switch build (NRO).
+          Remaster-only Nintendo Switch frontend (NRO) - **pre-release, not a finished game**.
 
-          This release does NOT contain the game ROM or the HD texture pack.
-          Copy these to `sdmc:/switch/sftm/` on the console:
-          - `sftm.zip` - your own legally obtained ROM set
-          - `hd/hd.idx` and `hd/hd-N.rgba` - the HD pack built with `tools/pack_replacements.py`
+          What it does: MAME2003-plus runs the game logic, physics, AI, collisions and original audio.
+          The core is patched to publish its blitter events; an independent OpenGL ES 3 renderer replays them
+          into two persistent HD planes (flip, scale, skew, clip, transparency, wrap, shift-register clears,
+          scroll) using redrawn textures. The native framebuffer is never displayed and there is no Original/HD toggle.
 
-          Sprites without an HD replacement are drawn as nothing (never as the original graphics)
-          and are listed in `sdmc:/switch/sftm/unresolved.tsv`.
+          What it does NOT contain, and why you will see a black screen without them:
+          - the game ROM: put your own legally obtained `sftm.zip` in `sdmc:/switch/sftm/`
+          - the HD texture pack (`hd/hd.idx` + `hd/hd-N.rgba`, built with `tools/pack_replacements.py`).
+            The photorealistic redrawn sprites and backgrounds have not been produced yet.
+
+          Sprites without an HD replacement are drawn as nothing (never as the original graphics) and are listed in
+          `sdmc:/switch/sftm/unresolved.tsv`, which is the to-do list for the art pipeline.
+          Frame-rate and timing logs are written to `sdmc:/switch/sftm/sftm-debug.log`.
+          Not yet verified on real hardware.
+
+          Includes the MAME2003-plus core (MAME non-commercial licence).
           EOF
-          gh release create "$tag" Street-Fighter-Remaster.nro --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Street Fighter Remaster $tag" --notes-file notes.md
+          gh release create "$tag" Street-Fighter-Remaster.nro --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Street Fighter Remaster $tag (pre-release)" --notes-file notes.md
