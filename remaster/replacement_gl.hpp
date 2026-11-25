@@ -18,6 +18,11 @@ public:
  struct Page {GLuint texture;unsigned width,height;};
  // Caller supplies shader mapping logical pixel positions to clip space.
  void draw(const ReplacementFrame& frame,const std::vector<Page>& pages,GLuint program){
+ for(const auto& cmd:frame.commands){
+ const auto& page=pages.at(cmd.region.page);
+ if(!page.texture)throw std::invalid_argument("Missing atlas texture");
+ replacementQuad(cmd,page.width,page.height);
+ }
  glUseProgram(program);glBindVertexArray(vao);glBindBuffer(GL_ARRAY_BUFFER,vbo);
  glEnable(GL_BLEND);glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);glActiveTexture(GL_TEXTURE0);
  for(const auto& cmd:frame.commands){
