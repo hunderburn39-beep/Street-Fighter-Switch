@@ -16,7 +16,12 @@ typedef struct {
  void (*transfer)(void *, const SftmVisualOp *);
  void (*end_frame)(void *, uint64_t);
 } SftmVisualSink;
-void sftm_visual_bind(const SftmVisualSink *sink);
+#if defined(__GNUC__)
+#define SFTM_VISUAL_API __attribute__((visibility("default")))
+#else
+#define SFTM_VISUAL_API
+#endif
+SFTM_VISUAL_API void sftm_visual_bind(const SftmVisualSink *sink);
 void sftm_visual_begin(void);
 void sftm_visual_transfer(const SftmVisualOp *op);
 void sftm_visual_end(void);
