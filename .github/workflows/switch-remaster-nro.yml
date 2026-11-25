@@ -2,7 +2,7 @@ name: Build Switch Remaster NRO
 on:
   workflow_dispatch:
   push:
-    paths: ['.github/workflows/switch-remaster-nro.yml','remaster/switch*','remaster/*.hpp','remaster/shaders/**']
+    paths: ['.github/workflows/switch-remaster-nro.yml','remaster/switch*','remaster/*.hpp','remaster/shaders/**','remaster/visual_bridge.*','tools/patch_visual_bridge.py','tools/instrument_itech32.patch']
 concurrency:
   group: switch-remaster-nro-${{ github.ref }}
   cancel-in-progress: true
@@ -19,23 +19,26 @@ jobs:
           test -f "$DEVKITPRO/portlibs/switch/lib/libGLESv2.a"
       - name: Resolve core revision
         id: revision
-        run: echo "sha=$(git ls-remote https://github.com/libretro/mame2003-plus-libretro.git HEAD | cut -f1)" >> "$GITHUB_OUTPUT"
+        run: echo "sha=c7516a813cfc0dcc80508dadfeb9d8c62d710af0" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@v4
         id: core-cache
         with:
           path: core
-          key: switch-mame-core-v2-${{ steps.revision.outputs.sha }}
+          key: switch-mame-visual-v1-${{ steps.revision.outputs.sha }}-${{ hashFiles('remaster/visual_bridge.*', 'tools/patch_visual_bridge.py', 'tools/instrument_itech32.patch') }}
       - name: Build static core
         if: steps.core-cache.outputs.cache-hit != 'true'
         run: |
           git clone https://github.com/libretro/mame2003-plus-libretro.git core
           git -C core checkout "${{ steps.revision.outputs.sha }}"
+          cp remaster/visual_bridge.h core/src/vidhrdw/
+          python3 tools/patch_visual_bridge.py core/src/vidhrdw/itech32_vidhrdw.c
+          cat remaster/visual_bridge.c >> core/src/vidhrdw/itech32_vidhrdw.c
           make -C core platform=libnx -j2
       - uses: actions/cache/save@v4
         if: steps.core-cache.outputs.cache-hit != 'true'
         with:
           path: core
-          key: switch-mame-core-v2-${{ steps.revision.outputs.sha }}
+          key: switch-mame-visual-v1-${{ steps.revision.outputs.sha }}-${{ hashFiles('remaster/visual_bridge.*', 'tools/patch_visual_bridge.py', 'tools/instrument_itech32.patch') }}
       - name: Build Libretro support library
         shell: bash
         run: |
@@ -62,10 +65,29 @@ jobs:
           export PATH="$DEVKITPRO/devkitA64/bin:$DEVKITPRO/tools/bin:$PATH"
           archive=$(find core -name '*libretro*libnx*.a' -print -quit)
           test -n "$archive"
+          aarch64-none-elf-nm -g --defined-only "$archive" > /tmp/core-symbols.txt
+          grep -q ' T sftm_visual_bind
           git clone --depth 1 https://github.com/switchbrew/switch-examples.git official
           mkdir -p native/source
           cp official/templates/application/Makefile native/Makefile
-          cp remaster/*.hpp remaster/switch_main.cpp native/source/
+          cp remaster/*.hpp remaster/visual_bridge.h remaster/switch_main.cpp native/source/
+          cp "$archive" native/libmame.a
+          cp support/libsupport.a native/libsupport.a
+          sed -i -E 's/^TARGET[[:space:]]*:=.*/TARGET := Street-Fighter-Remaster/; s/^CXXFLAGS[[:space:]]*:=.*/CXXFLAGS := $(CFLAGS) -std=c++17 -fexceptions/; s@^LIBS[[:space:]]*:=.*@LIBS := -Wl,--start-group $(TOPDIR)/libmame.a $(TOPDIR)/libsupport.a -lEGL -lglapi -ldrm_nouveau -lGLESv2 -lz -lbz2 -lnx -lm -Wl,--end-group@' native/Makefile
+          make -C native -j2 APP_TITLE="Street Fighter Remaster" APP_AUTHOR="SFTM Project" APP_VERSION="0.2"
+          mkdir -p output/switch/sftm
+          cp native/Street-Fighter-Remaster.nro output/switch/sftm/
+          cp remaster/shaders/hd.vert remaster/shaders/hd.frag output/switch/sftm/
+          test -s output/switch/sftm/Street-Fighter-Remaster.nro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Street-Fighter-Remaster-Switch
+          path: output/
+ /tmp/core-symbols.txt
+          git clone --depth 1 https://github.com/switchbrew/switch-examples.git official
+          mkdir -p native/source
+          cp official/templates/application/Makefile native/Makefile
+          cp remaster/*.hpp remaster/visual_bridge.h remaster/switch_main.cpp native/source/
           cp "$archive" native/libmame.a
           cp support/libsupport.a native/libsupport.a
           sed -i -E 's/^TARGET[[:space:]]*:=.*/TARGET := Street-Fighter-Remaster/; s/^CXXFLAGS[[:space:]]*:=.*/CXXFLAGS := $(CFLAGS) -std=c++17 -fexceptions/; s@^LIBS[[:space:]]*:=.*@LIBS := -Wl,--start-group $(TOPDIR)/libmame.a $(TOPDIR)/libsupport.a -lEGL -lglapi -ldrm_nouveau -lGLESv2 -lz -lbz2 -lnx -lm -Wl,--end-group@' native/Makefile
