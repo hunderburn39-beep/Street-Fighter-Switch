@@ -20,7 +20,7 @@ jobs:
           python3 tools/patch_visual_bridge.py core/src/vidhrdw/itech32_vidhrdw.c
           cat remaster/visual_bridge.c >> core/src/vidhrdw/itech32_vidhrdw.c
           make -C core platform=unix -j2
-          python3 -c 'import ctypes; c=ctypes.CDLL("./core/mame2003_plus_libretro.so"); assert c.retro_api_version() == 1'
+          python3 -c 'import ctypes; c=ctypes.CDLL("./core/mame2003_plus_libretro.so"); assert c.retro_api_version() == 1; assert c.sftm_visual_bind'
       - uses: actions/upload-artifact@v4
         with:
           name: visual-core-linux
