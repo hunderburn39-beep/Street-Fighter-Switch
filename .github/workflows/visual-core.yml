@@ -19,6 +19,8 @@ jobs:
           cp remaster/visual_bridge.h core/src/vidhrdw/
           python3 tools/patch_visual_bridge.py core/src/vidhrdw/itech32_vidhrdw.c
           cat remaster/visual_bridge.c >> core/src/vidhrdw/itech32_vidhrdw.c
+          sed -i 's/global: retro_\*;/global: retro_*; sftm_visual_bind;/' core/link.T
+          grep -q 'sftm_visual_bind' core/link.T
           make -C core platform=unix -j2
           python3 -c 'import ctypes; c=ctypes.CDLL("./core/mame2003_plus_libretro.so"); assert c.retro_api_version() == 1; assert c.sftm_visual_bind'
       - uses: actions/upload-artifact@v4
