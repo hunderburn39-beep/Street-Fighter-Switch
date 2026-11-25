@@ -19,12 +19,12 @@ public:
  RuntimeSession(CoreLoader& c, FrameRenderer& renderer, double fps,
  CoreLoader::Environment env, CoreLoader::Audio audio,
  CoreLoader::AudioBatch batch, CoreLoader::InputPoll poll,
- CoreLoader::InputState input, const CoreLoader::GameInfo& game)
+ CoreLoader::InputState input, const CoreLoader::GameInfo& game, bool nativeVideo=true)
  :core(c),clock(fps){
   if(active || !env || !audio || !batch || !poll || !input)
    throw std::runtime_error("Invalid runtime callbacks");
   active=true;
-  LibretroVideo::attach(renderer);
+  if(nativeVideo)LibretroVideo::attach(renderer);else LibretroVideo::detach();
   try {
    core.set_environment(env);
    core.set_video(LibretroVideo::refresh);
