@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y g++ libglew-dev libgl-dev glslang-tools libsdl2-dev xvfb xauth libgl1-mesa-dri
+      - run: sudo apt-get update && sudo apt-get install -y g++ libglew-dev libgl-dev glslang-tools libsdl2-dev xvfb xauth libgl1-mesa-dri libegl-dev libgles-dev libegl1
       - run: glslangValidator -l remaster/shaders/hd.vert remaster/shaders/hd.frag
       - run: g++ -std=c++17 -Wall -Wextra -Werror remaster/tests/compile.cpp -o renderer-test -lGLEW -lGL
       - run: ./renderer-test
@@ -28,3 +28,11 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror remaster/tests/hd_renderer_gl.cpp -o hd-renderer-gl -lSDL2 -lGLEW -lGL
           xvfb-run -a ./hd-renderer-gl
+
+      - name: HD renderer pixel test on OpenGL ES 3 (the Switch API, software Mesa)
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -DSFTM_GLES remaster/tests/hd_renderer_gl.cpp -o hd-renderer-gles -lEGL -lGLESv2
+          LIBGL_ALWAYS_SOFTWARE=1 ./hd-renderer-gles
+
+      - name: Compile switch_main.cpp against console stand-ins
+        run: sh remaster/tests/check_switch_main.sh

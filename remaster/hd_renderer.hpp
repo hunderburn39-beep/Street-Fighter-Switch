@@ -254,6 +254,8 @@ void main(){
    glBufferData(GL_ARRAY_BUFFER,GLsizeiptr(batch.size()*sizeof(HdVertex)),batch.data(),GL_STREAM_DRAW);
    glDrawArrays(GL_TRIANGLES,0,GLsizei(batch.size()));
    glBindVertexArray(0);glDisable(GL_BLEND);glDisable(GL_SCISSOR_TEST);
+   // Never leave a plane bound: the caller's next glClear must hit the screen, not the plane.
+   glBindFramebuffer(GL_FRAMEBUFFER,0);
    ++counters.draws;
   }
   batch.clear();

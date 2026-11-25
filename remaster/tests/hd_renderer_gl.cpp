@@ -1,6 +1,11 @@
 // Pixel-level test of HdRenderer against a real GL context (run under Xvfb in CI).
 #include "../hd_renderer.hpp"
+#ifdef SFTM_GLES
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+#else
 #include <SDL2/SDL.h>
+#endif
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
@@ -27,15 +32,45 @@ static bool is(Px p,int R,int G,int B,int A){
  return close(p.c[0],R)&&close(p.c[1],G)&&close(p.c[2],B)&&close(p.c[3],A);
 }
 
-int main(){
- if(SDL_Init(SDL_INIT_VIDEO))return 1;
+#ifdef SFTM_GLES
+static EGLDisplay eglDpy=EGL_NO_DISPLAY;static EGLSurface eglSurf=EGL_NO_SURFACE;static EGLContext eglCtx=EGL_NO_CONTEXT;
+static bool createContext(){
+ // Software Mesa without any window system: the surfaceless platform plus a 64x64 pbuffer.
+ auto getPlatform=reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(eglGetProcAddress("eglGetPlatformDisplayEXT"));
+ eglDpy=getPlatform?getPlatform(EGL_PLATFORM_SURFACELESS_MESA,EGL_DEFAULT_DISPLAY,nullptr):eglGetDisplay(EGL_DEFAULT_DISPLAY);
+ EGLint major=0,minor=0;
+ if(eglDpy==EGL_NO_DISPLAY||!eglInitialize(eglDpy,&major,&minor)||!eglBindAPI(EGL_OPENGL_ES_API))return false;
+ const EGLint cfgAttr[]={EGL_SURFACE_TYPE,EGL_PBUFFER_BIT,EGL_RENDERABLE_TYPE,EGL_OPENGL_ES3_BIT,EGL_RED_SIZE,8,EGL_GREEN_SIZE,8,EGL_BLUE_SIZE,8,EGL_ALPHA_SIZE,8,EGL_NONE};
+ EGLConfig cfg;EGLint n=0;
+ if(!eglChooseConfig(eglDpy,cfgAttr,&cfg,1,&n)||n<1)return false;
+ const EGLint pb[]={EGL_WIDTH,64,EGL_HEIGHT,64,EGL_NONE};
+ eglSurf=eglCreatePbufferSurface(eglDpy,cfg,pb);
+ const EGLint ca[]={EGL_CONTEXT_CLIENT_VERSION,3,EGL_NONE};
+ eglCtx=eglCreateContext(eglDpy,cfg,EGL_NO_CONTEXT,ca);
+ if(eglSurf==EGL_NO_SURFACE||eglCtx==EGL_NO_CONTEXT||!eglMakeCurrent(eglDpy,eglSurf,eglSurf,eglCtx))return false;
+ std::cerr<<"GL_VERSION: "<<glGetString(GL_VERSION)<<" | "<<glGetString(GL_RENDERER)<<"\n";
+ return true;
+}
+static void destroyContext(){eglMakeCurrent(eglDpy,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);eglDestroyContext(eglDpy,eglCtx);eglDestroySurface(eglDpy,eglSurf);eglTerminate(eglDpy);}
+#else
+static SDL_Window* sdlWindow=nullptr;static SDL_GLContext sdlCtx=nullptr;
+static bool createContext(){
+ if(SDL_Init(SDL_INIT_VIDEO))return false;
  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION,3);
  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION,3);
  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,SDL_GL_CONTEXT_PROFILE_CORE);
- auto w=SDL_CreateWindow("hd renderer",0,0,64,64,SDL_WINDOW_OPENGL|SDL_WINDOW_HIDDEN);
- if(!w)return 2;
- auto ctx=SDL_GL_CreateContext(w);if(!ctx)return 3;
- glewExperimental=GL_TRUE;if(glewInit()!=GLEW_OK)return 4;while(glGetError()!=GL_NO_ERROR){}
+ sdlWindow=SDL_CreateWindow("hd renderer",0,0,64,64,SDL_WINDOW_OPENGL|SDL_WINDOW_HIDDEN);
+ if(!sdlWindow)return false;
+ sdlCtx=SDL_GL_CreateContext(sdlWindow);if(!sdlCtx)return false;
+ glewExperimental=GL_TRUE;if(glewInit()!=GLEW_OK)return false;
+ while(glGetError()!=GL_NO_ERROR){}
+ return true;
+}
+static void destroyContext(){SDL_GL_DeleteContext(sdlCtx);SDL_DestroyWindow(sdlWindow);SDL_Quit();}
+#endif
+
+int main(){
+ if(!createContext())return 2;
 
  char tmpl[]="/tmp/sfhdglXXXXXX";char* d=mkdtemp(tmpl);if(!d)return 5;std::string dir=d;
  // Page 16x16: A red | S red-left blue-right | B green-left transparent-right (4x4 each, scale 2).
@@ -93,12 +128,12 @@ int main(){
   r.apply(g);r.present(0,0,64,64);
   glReadPixels(0,63-5,1,1,GL_RGBA,GL_UNSIGNED_BYTE,px);
   CHECK(px[0]>250&&px[1]<5&&px[2]<5);
-  glReadPixels(10,63-5,1,1,GL_RGBA,GL_UNSIGNED_BYTE,px);
-  CHECK(px[0]<5);
+  glReadPixels(12,63-5,1,1,GL_RGBA,GL_UNSIGNED_BYTE,px); // screen 12 -> VRAM 22: empty
+  CHECK(px[0]<5&&px[1]<5&&px[2]<5);
   CHECK(glGetError()==GL_NO_ERROR);
  }catch(const std::exception& e){std::cerr<<"exception: "<<e.what()<<"\n";failures+=100;}
  std::string cmd="rm -rf "+dir;if(std::system(cmd.c_str())!=0)++failures;
- SDL_GL_DeleteContext(ctx);SDL_DestroyWindow(w);SDL_Quit();
+ destroyContext();
  if(failures)std::cerr<<failures<<" failure(s)\n";
  return failures?20:0;
 }

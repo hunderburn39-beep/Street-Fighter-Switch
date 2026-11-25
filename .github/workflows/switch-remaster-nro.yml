@@ -28,6 +28,10 @@ jobs:
           python-version: '3.11'
       - run: pip install Pillow
       - run: python -m unittest discover -s tools -p 'test_*.py'
+      - name: switch_main.cpp compile check
+        run: |
+          sudo apt-get update && sudo apt-get install -y libegl-dev libgles-dev
+          sh remaster/tests/check_switch_main.sh
       - name: Native unit tests
         run: |
           set -eux
@@ -103,7 +107,9 @@ jobs:
           archive=$(find core -name '*libretro*libnx*.a' -print -quit)
           test -n "$archive"
           # The bridge must be inside the core archive or the frontend cannot link.
-          aarch64-none-elf-nm "$archive" 2>/dev/null | grep -q ' T sftm_visual_bind'
+          # (Dump to a file first: `nm | grep -q` under pipefail dies with SIGPIPE, exit 141.)
+          aarch64-none-elf-nm -g --defined-only "$archive" > /tmp/core-symbols.txt
+          grep -w sftm_visual_bind /tmp/core-symbols.txt
           git clone --depth 1 https://github.com/switchbrew/switch-examples.git official
           mkdir -p native/source
           cp official/templates/application/Makefile native/Makefile
