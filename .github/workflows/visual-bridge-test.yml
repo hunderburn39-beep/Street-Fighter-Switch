@@ -1,0 +1,14 @@
+name: Visual bridge regression
+on:
+  push:
+    branches: [remaster-only]
+  workflow_dispatch:
+jobs:
+  bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and run
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -fsanitize=address,undefined remaster/visual_bridge.c tools/test_visual_bridge.c -o /tmp/visual-bridge-test
+          /tmp/visual-bridge-test
