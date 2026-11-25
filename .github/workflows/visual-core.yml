@@ -1,0 +1,27 @@
+name: Visual core integration
+on:
+  push:
+    branches: [remaster-only]
+    paths:
+      - '.github/workflows/visual-core.yml'
+      - 'tools/patch_visual_bridge.py'
+      - 'remaster/visual_bridge.*'
+  workflow_dispatch:
+jobs:
+  core:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          git init core
+          git -C core fetch --depth 1 https://github.com/libretro/mame2003-plus-libretro.git c7516a813cfc0dcc80508dadfeb9d8c62d710af0
+          git -C core checkout FETCH_HEAD
+          cp remaster/visual_bridge.h core/src/vidhrdw/
+          python3 tools/patch_visual_bridge.py core/src/vidhrdw/itech32_vidhrdw.c
+          cat remaster/visual_bridge.c >> core/src/vidhrdw/itech32_vidhrdw.c
+          make -C core platform=unix -j2
+          python3 -c 'import ctypes; c=ctypes.CDLL("./core/mame2003_plus_libretro.so"); assert c.retro_api_version() == 1'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: visual-core-linux
+          path: core/mame2003_plus_libretro.so
