@@ -16,18 +16,24 @@ class RuntimeSession {
  bool initialized=false, loaded=false;
  inline static bool active=false;
 public:
+ // Legacy path used by the desktop tests: the native frame is uploaded by LibretroVideo.
  RuntimeSession(CoreLoader& c, FrameRenderer& renderer, double fps,
  CoreLoader::Environment env, CoreLoader::Audio audio,
  CoreLoader::AudioBatch batch, CoreLoader::InputPoll poll,
- CoreLoader::InputState input, const CoreLoader::GameInfo& game, bool nativeVideo=true)
+ CoreLoader::InputState input, const CoreLoader::GameInfo& game)
+ :RuntimeSession(c,attachLegacyVideo(renderer),fps,env,audio,batch,poll,input,game){}
+ // Remaster path: the caller owns the video callback and must not present the native frame.
+ RuntimeSession(CoreLoader& c, CoreLoader::Video video, double fps,
+ CoreLoader::Environment env, CoreLoader::Audio audio,
+ CoreLoader::AudioBatch batch, CoreLoader::InputPoll poll,
+ CoreLoader::InputState input, const CoreLoader::GameInfo& game)
  :core(c),clock(fps){
-  if(active || !env || !audio || !batch || !poll || !input)
+  if(active || !video || !env || !audio || !batch || !poll || !input)
    throw std::runtime_error("Invalid runtime callbacks");
   active=true;
-  if(nativeVideo)LibretroVideo::attach(renderer);else LibretroVideo::detach();
   try {
    core.set_environment(env);
-   core.set_video(LibretroVideo::refresh);
+   core.set_video(video);
    core.set_audio(audio);core.set_audio_batch(batch);
    core.set_input_poll(poll);core.set_input_state(input);
    core.init();initialized=true;
@@ -57,6 +63,9 @@ public:
   if(LibretroVideo::hasError())throw std::runtime_error("Video callback failed");
  }
 private:
+ static CoreLoader::Video attachLegacyVideo(FrameRenderer& renderer){
+  LibretroVideo::attach(renderer);return LibretroVideo::refresh;
+ }
  void close(){
   if(loaded){core.unload_game();loaded=false;}
   if(initialized){core.deinit();initialized=false;}

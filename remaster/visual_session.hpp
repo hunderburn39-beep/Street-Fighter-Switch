@@ -12,6 +12,7 @@ public:
  VisualSession(const VisualSession&)=delete;
  VisualSession& operator=(const VisualSession&)=delete;
  const VisualQueue& frames() const{return queue;}
+ VisualQueue& frames(){return queue;}
 private:
  Bind binding;
  VisualQueue queue;

@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'remaster/**'
+      - 'tools/**'
       - '.github/workflows/remaster-renderer.yml'
 jobs:
   compile:
@@ -22,3 +23,8 @@ jobs:
       - run: g++ -std=c++17 -Wall -Wextra -Werror -shared -fPIC remaster/tests/mock_core.cpp -o mock_core.so
       - run: g++ -std=c++17 -Wall -Wextra -Werror remaster/tests/runtime_integration.cpp -o runtime-integration -lSDL2 -lGLEW -lGL -ldl -pthread
       - run: xvfb-run -a ./runtime-integration
+
+      - name: HD renderer pixel test (real GL context)
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror remaster/tests/hd_renderer_gl.cpp -o hd-renderer-gl -lSDL2 -lGLEW -lGL
+          xvfb-run -a ./hd-renderer-gl

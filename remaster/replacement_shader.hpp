@@ -11,7 +11,7 @@ void main(){
 }
 )GLSL";
 static const char* replacementFragmentShader=R"GLSL(#version 300 es
-precision mediump float;
+precision highp float;
 uniform sampler2D atlas;
 in vec2 texCoord;
 out vec4 color;

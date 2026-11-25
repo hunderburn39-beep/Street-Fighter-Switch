@@ -11,7 +11,6 @@ public:
   padInitializeDefault(&pad);
  }
  static void poll(){padUpdate(&pad);held=padGetButtons(&pad);}
- static bool graphicsChord(){return (held&HidNpadButton_StickL)&&(held&HidNpadButton_StickR);}
  static bool exitRequested(){return (held&HidNpadButton_Plus)&&(held&HidNpadButton_Minus);}
  static int16_t state(unsigned port,unsigned device,unsigned index,unsigned id){
   if(id==14||id==15)return 0;

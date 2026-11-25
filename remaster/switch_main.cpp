@@ -1,35 +1,57 @@
+// Street Fighter: The Movie Remaster (Nintendo Switch).
+// Remaster only: MAME2003-plus supplies logic, physics, AI, collisions and audio.
+// Every pixel on screen comes from HdRenderer, which replays the core's blitter
+// events with the redrawn HD textures. The native framebuffer is discarded.
 #include "switch_graphics.hpp"
 #include "switch_core.hpp"
 #include "switch_input.hpp"
 #include "switch_audio.hpp"
 #include "runtime_session.hpp"
 #include "visual_session.hpp"
-#include "replacement_atlas.hpp"
-#include "replacement_shader.hpp"
-#include <cstdio>
-#include <fstream>
-#include <sstream>
+#include "hd_asset_pack.hpp"
+#include "hd_renderer.hpp"
+#include <chrono>
 #include <cstdarg>
+#include <cstdio>
 #include <cstring>
 #include <map>
 #include <string>
+#include <vector>
+
+static const char* const kDirectory="sdmc:/switch/sftm";
+static const char* const kPackDirectory="sdmc:/switch/sftm/hd";
+static const char* const kLog="sdmc:/switch/sftm/sftm-debug.log";
+static const char* const kUnresolved="sdmc:/switch/sftm/unresolved.tsv";
+
 static void trace(const char* msg){
- if(FILE* f=std::fopen("sdmc:/switch/sftm/sftm-debug.log","a")){std::fprintf(f,"%s\n",msg);std::fflush(f);std::fclose(f);}
+ if(FILE* f=std::fopen(kLog,"a")){std::fprintf(f,"%s\n",msg);std::fflush(f);std::fclose(f);}
 }
 static void coreLog(int level,const char* fmt,...){
  if(level<2)return;
  if(std::strstr(fmt,"set_irq_line") || std::strstr(fmt,"sound_data_") || std::strstr(fmt,"sound output write"))return;
- if(FILE* f=std::fopen("sdmc:/switch/sftm/sftm-debug.log","a")){std::fprintf(f,"core[%d]: ",level);va_list ap;va_start(ap,fmt);std::vfprintf(f,fmt,ap);va_end(ap);std::fflush(f);std::fclose(f);}
+ if(FILE* f=std::fopen(kLog,"a")){std::fprintf(f,"core[%d]: ",level);va_list ap;va_start(ap,fmt);std::vfprintf(f,fmt,ap);va_end(ap);std::fflush(f);std::fclose(f);}
 }
+// The core still renders its own frame internally; it is intentionally ignored.
+static void discardNativeFrame(const void*,unsigned,unsigned,std::size_t){}
+
+// Sprites the core drew that have no HD replacement yet. They are drawn as nothing
+// (never as the original graphics) and listed once so the asset team can cover them.
+static void reportUnresolved(const SftmVisualOp& op){
+ FILE* f=std::fopen(kUnresolved,"a");
+ if(!f)return;
+ if(std::ftell(f)==0)std::fputs("rom_address\tpalette_bank\tencoding\twidth\theight\n",f);
+ std::fprintf(f,"%u\t%u\t%u\t%d\t%d\n",op.rom_address,op.palette_bank,op.encoding,op.width,op.height);
+ std::fclose(f);
+}
+
 static bool environment(unsigned cmd,void* data){
  struct Variable { const char* key; const char* value; };
  static std::map<std::string,std::string> defaults;
- static const char* directory="sdmc:/switch/sftm";
  switch(cmd){
  case 27: if(data){struct LogCallback{void(*log)(int,const char*,...);};static_cast<LogCallback*>(data)->log=coreLog;return true;}return false;
- case 10:return data&&LibretroVideo::setFormat(*static_cast<unsigned*>(data));
+ case 10:return data!=nullptr; // pixel format: accepted, the native frame is never displayed
  case 3:if(data)*static_cast<bool*>(data)=true;return data!=nullptr;
- case 9:case 31:if(data)*static_cast<const char**>(data)=directory;return data!=nullptr;
+ case 9:case 31:if(data)*static_cast<const char**>(data)=kDirectory;return data!=nullptr;
  case 16: {
   if(!data)return false;
   defaults.clear();
@@ -56,69 +78,66 @@ static bool environment(unsigned cmd,void* data){
  default:return false;
  }
 }
-static GLuint shader(GLenum type,const char* source){
- GLuint id=glCreateShader(type);glShaderSource(id,1,&source,nullptr);glCompileShader(id);
- GLint ok=0;glGetShaderiv(id,GL_COMPILE_STATUS,&ok);
- if(!ok){glDeleteShader(id);throw std::runtime_error("Replacement shader compile failed");}
- return id;
-}
+
 int main(){
- if(FILE* f=std::fopen("sdmc:/switch/sftm/sftm-debug.log","w")){std::fputs("SFTM diagnostic GLES3\n",f);std::fclose(f);}
+ if(FILE* f=std::fopen(kLog,"w")){std::fputs("SFTM Remaster GLES3\n",f);std::fclose(f);}
+ if(FILE* f=std::fopen(kUnresolved,"w"))std::fclose(f);
  trace("main entered");
  try{
- trace("graphics begin");
  SwitchGraphics graphics;
  trace("graphics ok");
  SwitchInput::init();
- trace("input ok; audio begin");
  SwitchAudio audio;
- trace("audio ok; shaders begin");
- auto v=shader(GL_VERTEX_SHADER,replacementVertexShader);
- auto f=shader(GL_FRAGMENT_SHADER,replacementFragmentShader);
- auto p=glCreateProgram();glAttachShader(p,v);glAttachShader(p,f);glLinkProgram(p);
- GLint ok=0;glGetProgramiv(p,GL_LINK_STATUS,&ok);
- if(!ok)throw std::runtime_error("Shader link failed");
- trace("shaders ok; renderer begin");
- FrameRenderer renderer;
- ReplacementAtlas atlas;atlas.load("sdmc:/switch/sftm/hd");
- ReplacementGL replacement;replacement.init();
- glUseProgram(p);glUniform1i(glGetUniformLocation(p,"atlas"),0);
- glUniform2f(glGetUniformLocation(p,"logicalSize"),384.0f,240.0f);
- trace("renderer ok; core binding begin");
+ trace("audio ok; HD pack begin");
+ HdAssetPack pack(kPackDirectory); // fails early with a readable message if the pack is absent
+ {char msg[128];std::snprintf(msg,sizeof msg,"HD pack: %zu sprites, %u page(s), plane scale %u",pack.info().entries,pack.info().pageCount,pack.info().planeScale);trace(msg);}
  CoreLoader core(switchCoreApi());
- trace("core binding ok; session begin");
+ VisualSession visual(sftm_visual_bind); // must be bound before the game starts drawing
  CoreLoader::GameInfo game{"sdmc:/switch/sftm/sftm.zip",nullptr,0,nullptr};
- {VisualSession visual(sftm_visual_bind);
- RuntimeSession session(core,renderer,60.0,environment,SwitchAudio::sample,
- SwitchAudio::batch,SwitchInput::poll,SwitchInput::state,game,false);
- trace("session ok; first frame begin");
- bool first=true;
- unsigned perfFrames=0;
- bool visualSeen=false;
- auto perfStart=std::chrono::steady_clock::now();
- double stepMs=0,presentMs=0;
- while(appletMainLoop()){
- SwitchInput::poll();if(SwitchInput::exitRequested())break;
- auto t0=std::chrono::steady_clock::now();session.step();
- if(!visualSeen && visual.frames().available() && !visual.frames().latest().ops.empty()){
-  char msg[128];std::snprintf(msg,sizeof(msg),"VISUAL bridge frame=%llu ops=%zu",static_cast<unsigned long long>(visual.frames().latest().number),visual.frames().latest().ops.size());trace(msg);visualSeen=true;
+ {RuntimeSession session(core,discardNativeFrame,60.0,environment,SwitchAudio::sample,
+  SwitchAudio::batch,SwitchInput::poll,SwitchInput::state,game);
+  NativeAvInfo av{};retro_get_system_av_info(&av);
+  const int screenW=av.base_width?int(av.base_width):384, screenH=av.base_height?int(av.base_height):240;
+  {char msg[96];std::snprintf(msg,sizeof msg,"native display window %dx%d",screenW,screenH);trace(msg);}
+  HdRenderer renderer(pack,screenW,screenH);
+  renderer.setUnresolvedCallback(reportUnresolved);
+  trace("renderer ok; first frame begin");
+  std::vector<VisualQueue::Frame> frames;
+  bool first=true;
+  unsigned perfFrames=0;
+  auto perfStart=std::chrono::steady_clock::now();
+  double stepMs=0,renderMs=0;
+  while(appletMainLoop()){
+   SwitchInput::poll();if(SwitchInput::exitRequested())break;
+   auto t0=std::chrono::steady_clock::now();
+   session.step();
+   auto t1=std::chrono::steady_clock::now();
+   frames.clear();visual.frames().take(frames);
+   for(const auto& frame:frames)renderer.apply(frame); // every frame, in order: planes are persistent
+   glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
+   renderer.present(160,0,960,720);
+   graphics.present();
+   auto t2=std::chrono::steady_clock::now();
+   if(first){trace("first presentation ok");first=false;}
+   stepMs+=std::chrono::duration<double,std::milli>(t1-t0).count();
+   renderMs+=std::chrono::duration<double,std::milli>(t2-t1).count();
+   if(++perfFrames==300){
+    const double elapsed=std::chrono::duration<double>(t2-perfStart).count();
+    const auto& s=renderer.stats();
+    char msg[240];
+    std::snprintf(msg,sizeof msg,"PERF fps=%.2f step_ms=%.2f render_ms=%.2f blits=%llu unresolved=%llu draws=%llu clears=%llu",
+     300/elapsed,stepMs/300,renderMs/300,(unsigned long long)s.resolvedBlits,(unsigned long long)s.unresolvedBlits,
+     (unsigned long long)s.draws,(unsigned long long)s.clears);
+    trace(msg);
+    perfFrames=0;stepMs=renderMs=0;perfStart=t2;
+   }
+  }
  }
- auto t1=std::chrono::steady_clock::now();if(first)trace("first core frame ok");glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
- glViewport(64,0,1152,720);
- if(visual.frames().available()){
-  auto frame=resolveFrame(visual.frames().latest(),atlas.index);
-  if(frame.unresolved.empty())replacement.draw(frame,atlas.pages,p);
-  else if(perfFrames==0){char msg[128];std::snprintf(msg,sizeof(msg),"HD missing sprites=%zu",frame.unresolved.size());trace(msg);}
- }graphics.present();auto t2=std::chrono::steady_clock::now();
- stepMs+=std::chrono::duration<double,std::milli>(t1-t0).count();presentMs+=std::chrono::duration<double,std::milli>(t2-t1).count();
- if(++perfFrames==300){double elapsed=std::chrono::duration<double>(t2-perfStart).count();char msg[160];std::snprintf(msg,sizeof(msg),"PERF fps=%.2f step_ms=%.2f render_ms=%.2f",300/elapsed,stepMs/300,presentMs/300);trace(msg);perfFrames=0;stepMs=presentMs=0;perfStart=t2;}
- if(first){trace("first presentation ok");first=false;}
- }}
- replacement.release();glDeleteProgram(p);glDeleteShader(v);glDeleteShader(f);
  }catch(const std::exception& e){
- trace(e.what());
- consoleInit(nullptr);std::printf("SFTM: %s\nPress PLUS to exit.\n",e.what());
- SwitchInput::init();while(appletMainLoop()){SwitchInput::poll();if(SwitchInput::state(0,1,0,3))break;consoleUpdate(nullptr);}consoleExit(nullptr);return 1;
+  trace(e.what());
+  consoleInit(nullptr);
+  std::printf("SFTM Remaster: %s\n\nExpected files in sdmc:/switch/sftm/ :\n  sftm.zip  (your own ROM set)\n  hd/hd.idx and hd/hd-N.rgba  (HD texture pack)\n\nPress PLUS to exit.\n",e.what());
+  SwitchInput::init();while(appletMainLoop()){SwitchInput::poll();if(SwitchInput::state(0,1,0,3))break;consoleUpdate(nullptr);}consoleExit(nullptr);return 1;
  }
  return 0;
 }

@@ -1,13 +1,47 @@
 name: Build Switch Remaster NRO
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish the NRO as a GitHub pre-release'
+        type: boolean
+        default: false
   push:
-    paths: ['.github/workflows/switch-remaster-nro.yml','remaster/switch*','remaster/*.hpp','remaster/shaders/**','remaster/visual_bridge.*','tools/patch_visual_bridge.py','tools/instrument_itech32.patch']
+    branches: [remaster-only]
+    paths:
+      - '.github/workflows/switch-remaster-nro.yml'
+      - 'remaster/**'
+      - 'tools/patch_visual_bridge.py'
+      - 'tools/pack_replacements.py'
 concurrency:
   group: switch-remaster-nro-${{ github.ref }}
   cancel-in-progress: true
+env:
+  CORE_REVISION: c7516a813cfc0dcc80508dadfeb9d8c62d710af0
 jobs:
+  host-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install Pillow
+      - run: python -m unittest discover -s tools -p 'test_*.py'
+      - name: Native unit tests
+        run: |
+          set -eux
+          gcc -Wall -Wextra -Werror -c remaster/visual_bridge.c -o bridge.o
+          gcc -Wall -Wextra -Werror -Iremaster tools/test_visual_bridge.c bridge.o -o t_bridge && ./t_bridge
+          for t in visual_queue visual_session; do
+            g++ -std=c++17 -Wall -Wextra -Werror -Iremaster tools/test_$t.cpp bridge.o -o t_$t && ./t_$t
+          done
+          for t in replacement_index replacement_commands replacement_geometry hd_blit hd_asset_pack; do
+            g++ -std=c++17 -Wall -Wextra -Werror -Iremaster tools/test_$t.cpp -o t_$t && ./t_$t
+          done
+
   build:
+    needs: host-tests
     runs-on: ubuntu-latest
     container: devkitpro/devkita64:latest
     steps:
@@ -17,29 +51,31 @@ jobs:
         run: |
           ls -l "$DEVKITPRO/portlibs/switch/lib/"*GL* "$DEVKITPRO/portlibs/switch/lib/"*nouveau* || true
           test -f "$DEVKITPRO/portlibs/switch/lib/libGLESv2.a"
-      - name: Resolve core revision
-        id: revision
-        run: echo "sha=c7516a813cfc0dcc80508dadfeb9d8c62d710af0" >> "$GITHUB_OUTPUT"
+      - name: Ensure python3
+        run: command -v python3 || (apt-get update && apt-get install -y python3)
       - uses: actions/cache/restore@v4
         id: core-cache
         with:
           path: core
-          key: switch-mame-visual-v1-${{ steps.revision.outputs.sha }}-${{ hashFiles('remaster/visual_bridge.*', 'tools/patch_visual_bridge.py', 'tools/instrument_itech32.patch') }}
-      - name: Build static core
+          key: switch-mame-core-bridge-v1-${{ env.CORE_REVISION }}-${{ hashFiles('tools/patch_visual_bridge.py', 'remaster/visual_bridge.h', 'remaster/visual_bridge.c') }}
+      - name: Build static core with graphics bridge
         if: steps.core-cache.outputs.cache-hit != 'true'
+        shell: bash
         run: |
-          command -v python3 || dkp-pacman -S --needed --noconfirm python
-          git clone https://github.com/libretro/mame2003-plus-libretro.git core
-          git -C core checkout "${{ steps.revision.outputs.sha }}"
+          set -eux
+          git init core
+          git -C core fetch --depth 1 https://github.com/libretro/mame2003-plus-libretro.git "$CORE_REVISION"
+          git -C core checkout FETCH_HEAD
           cp remaster/visual_bridge.h core/src/vidhrdw/
           python3 tools/patch_visual_bridge.py core/src/vidhrdw/itech32_vidhrdw.c
           cat remaster/visual_bridge.c >> core/src/vidhrdw/itech32_vidhrdw.c
+          grep -q 'sftm_emit_display' core/src/vidhrdw/itech32_vidhrdw.c
           make -C core platform=libnx -j2
       - uses: actions/cache/save@v4
         if: steps.core-cache.outputs.cache-hit != 'true'
         with:
           path: core
-          key: switch-mame-visual-v1-${{ steps.revision.outputs.sha }}-${{ hashFiles('remaster/visual_bridge.*', 'tools/patch_visual_bridge.py', 'tools/instrument_itech32.patch') }}
+          key: switch-mame-core-bridge-v1-${{ env.CORE_REVISION }}-${{ hashFiles('tools/patch_visual_bridge.py', 'remaster/visual_bridge.h', 'remaster/visual_bridge.c') }}
       - name: Build Libretro support library
         shell: bash
         run: |
@@ -66,8 +102,8 @@ jobs:
           export PATH="$DEVKITPRO/devkitA64/bin:$DEVKITPRO/tools/bin:$PATH"
           archive=$(find core -name '*libretro*libnx*.a' -print -quit)
           test -n "$archive"
-          aarch64-none-elf-nm -g --defined-only "$archive" > /tmp/core-symbols.txt
-          grep -w sftm_visual_bind /tmp/core-symbols.txt
+          # The bridge must be inside the core archive or the frontend cannot link.
+          aarch64-none-elf-nm "$archive" 2>/dev/null | grep -q ' T sftm_visual_bind'
           git clone --depth 1 https://github.com/switchbrew/switch-examples.git official
           mkdir -p native/source
           cp official/templates/application/Makefile native/Makefile
@@ -75,12 +111,43 @@ jobs:
           cp "$archive" native/libmame.a
           cp support/libsupport.a native/libsupport.a
           sed -i -E 's/^TARGET[[:space:]]*:=.*/TARGET := Street-Fighter-Remaster/; s/^CXXFLAGS[[:space:]]*:=.*/CXXFLAGS := $(CFLAGS) -std=c++17 -fexceptions/; s@^LIBS[[:space:]]*:=.*@LIBS := -Wl,--start-group $(TOPDIR)/libmame.a $(TOPDIR)/libsupport.a -lEGL -lglapi -ldrm_nouveau -lGLESv2 -lpng -lz -lbz2 -lnx -lm -Wl,--end-group@' native/Makefile
-          make -C native -j2 APP_TITLE="Street Fighter Remaster" APP_AUTHOR="SFTM Project" APP_VERSION="0.2"
-          mkdir -p output/switch/sftm
+          make -C native -j2 APP_TITLE="Street Fighter Remaster" APP_AUTHOR="SFTM Project" APP_VERSION="0.3"
+          mkdir -p output/switch/sftm/hd
           cp native/Street-Fighter-Remaster.nro output/switch/sftm/
-          if [ -d remaster/hd ]; then cp -r remaster/hd output/switch/sftm/; fi
+          if [ -d remaster/hd ]; then cp -r remaster/hd/. output/switch/sftm/hd/; fi
           test -s output/switch/sftm/Street-Fighter-Remaster.nro
       - uses: actions/upload-artifact@v4
         with:
           name: Street-Fighter-Remaster-Switch
           path: output/
+
+  release:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Street-Fighter-Remaster-Switch
+          path: dist
+      - name: Publish pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eux
+          tag="remaster-v0.3.${{ github.run_number }}"
+          cp dist/switch/sftm/Street-Fighter-Remaster.nro Street-Fighter-Remaster.nro
+          cat > notes.md <<'EOF'
+          Remaster-only Nintendo Switch build (NRO).
+
+          This release does NOT contain the game ROM or the HD texture pack.
+          Copy these to `sdmc:/switch/sftm/` on the console:
+          - `sftm.zip` - your own legally obtained ROM set
+          - `hd/hd.idx` and `hd/hd-N.rgba` - the HD pack built with `tools/pack_replacements.py`
+
+          Sprites without an HD replacement are drawn as nothing (never as the original graphics)
+          and are listed in `sdmc:/switch/sftm/unresolved.tsv`.
+          EOF
+          gh release create "$tag" Street-Fighter-Remaster.nro --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Street Fighter Remaster $tag" --notes-file notes.md
