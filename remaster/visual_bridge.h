@@ -16,7 +16,11 @@ typedef struct {
  void (*transfer)(void *, const SftmVisualOp *);
  void (*end_frame)(void *, uint64_t);
 } SftmVisualSink;
-/* Contract only: core implementation must preserve persistent video planes,
+void sftm_visual_bind(const SftmVisualSink *sink);
+void sftm_visual_begin(void);
+void sftm_visual_transfer(const SftmVisualOp *op);
+void sftm_visual_end(void);
+/* Contract: core implementation must preserve persistent video planes,
    clipping, palette changes and non-blit operations. No native framebuffer
    may be presented by the remaster renderer. */
 #ifdef __cplusplus
