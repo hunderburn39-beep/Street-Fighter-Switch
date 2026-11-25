@@ -18,3 +18,5 @@ jobs:
           /tmp/visual-queue-test
           c++ -std=c++11 -Wall -Wextra -Werror tools/test_visual_session.cpp /tmp/visual-bridge.o -o /tmp/visual-session-test
           /tmp/visual-session-test
+          c++ -std=c++11 -Wall -Wextra -Werror tools/test_replacement_index.cpp -o /tmp/replacement-index-test
+          /tmp/replacement-index-test
