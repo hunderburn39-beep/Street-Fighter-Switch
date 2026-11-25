@@ -16,3 +16,5 @@ jobs:
           cc -std=c99 -Wall -Wextra -Werror -c remaster/visual_bridge.c -o /tmp/visual-bridge.o
           c++ -std=c++11 -Wall -Wextra -Werror tools/test_visual_queue.cpp /tmp/visual-bridge.o -o /tmp/visual-queue-test
           /tmp/visual-queue-test
+          c++ -std=c++11 -Wall -Wextra -Werror tools/test_visual_session.cpp /tmp/visual-bridge.o -o /tmp/visual-session-test
+          /tmp/visual-session-test
