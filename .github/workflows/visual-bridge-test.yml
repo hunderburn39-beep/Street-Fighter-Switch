@@ -22,3 +22,5 @@ jobs:
           /tmp/replacement-index-test
           c++ -std=c++11 -Wall -Wextra -Werror tools/test_replacement_commands.cpp -o /tmp/replacement-commands-test
           /tmp/replacement-commands-test
+          c++ -std=c++11 -Wall -Wextra -Werror tools/test_replacement_geometry.cpp -o /tmp/replacement-geometry-test
+          /tmp/replacement-geometry-test
